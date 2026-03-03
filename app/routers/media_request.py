@@ -13,7 +13,7 @@ from app.services.bot_service import bot
 router = APIRouter()
 
 # ==========================================================
-# 🔥 核心：【全自动】数据库架构强制升级 (支持多季与修复主键)
+# 🔥 核心：【深度修复】数据库架构与唯一性约束 (杜绝覆盖丢失)
 # ==========================================================
 def ensure_db_schema():
     conn = sqlite3.connect(DB_PATH)
@@ -25,7 +25,7 @@ def ensure_db_schema():
     if cols:
         pk_cols = [col[1] for col in cols if col[5] > 0]
         if 'season' not in pk_cols:
-            print("🚨 [映迹] 检测到旧版单主键架构，正在执行强制升级...")
+            print("🚨 [映迹] 检测到旧版单主键架构，正在升级 media_requests 主表...")
             c.execute("ALTER TABLE media_requests RENAME TO media_requests_old")
             c.execute("""
                 CREATE TABLE media_requests (
@@ -41,23 +41,30 @@ def ensure_db_schema():
             """)
             c.execute("DROP TABLE media_requests_old")
 
-    # 2. 升级 request_users 投票关联表
-    c.execute("PRAGMA table_info(request_users)")
-    u_cols = [col[1] for col in c.fetchall()]
-    if u_cols and 'season' not in u_cols:
-        print("🚨 [映迹] 正在升级投票表架构，修复支持者名称显示...")
-        c.execute("ALTER TABLE request_users RENAME TO request_users_old")
-        c.execute("""
-            CREATE TABLE request_users (
-                tmdb_id INTEGER, user_id TEXT, username TEXT, season INTEGER DEFAULT 0,
-                requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(tmdb_id, user_id, season)
-            )
-        """)
-        c.execute("""
-            INSERT OR IGNORE INTO request_users (tmdb_id, user_id, username, season)
-            SELECT tmdb_id, user_id, COALESCE(username, '系统用户'), 0 FROM request_users_old
-        """)
-        c.execute("DROP TABLE request_users_old")
+    # 2. 深度修复 request_users 投票表的 UNIQUE 约束
+    c.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='request_users'")
+    u_sql = c.fetchone()
+    if u_sql:
+        sql_str = u_sql[0].lower().replace(" ", "")
+        # 严格检查约束里是否同时包含 tmdb_id, user_id, season
+        if "unique(tmdb_id,user_id,season)" not in sql_str:
+            print("🚨 [映迹] 修复投票表唯一约束 (解决多季互相覆盖Bug)...")
+            c.execute("ALTER TABLE request_users RENAME TO request_users_old")
+            c.execute("""
+                CREATE TABLE request_users (
+                    tmdb_id INTEGER, 
+                    user_id TEXT, 
+                    username TEXT, 
+                    season INTEGER DEFAULT 0,
+                    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(tmdb_id, user_id, season)
+                )
+            """)
+            c.execute("""
+                INSERT OR IGNORE INTO request_users (tmdb_id, user_id, username, season)
+                SELECT tmdb_id, user_id, COALESCE(username, '系统用户'), COALESCE(season, 0) FROM request_users_old
+            """)
+            c.execute("DROP TABLE request_users_old")
 
     conn.commit()
     conn.close()
@@ -88,7 +95,6 @@ def get_emby_admin(host, key):
     except: return None
 
 def check_emby_exists(tmdb_id, media_type, season=0):
-    """穿透检查 Emby 库内是否存在该资源，防止重复求片"""
     host = cfg.get("emby_host"); key = cfg.get("emby_api_key")
     if not host or not key: return False
     try:
@@ -99,10 +105,8 @@ def check_emby_exists(tmdb_id, media_type, season=0):
         res = requests.get(url, timeout=5).json()
         if not res.get("Items"): return False
         
-        # 电影直接返回存在
         if media_type == "movie": return True
         
-        # 剧集需穿透检查具体季度
         sid = res["Items"][0]["Id"]
         season_url = f"{host}/emby/Shows/{sid}/Seasons?api_key={key}&UserId={admin_id}"
         s_res = requests.get(season_url, timeout=5).json()
@@ -114,7 +118,7 @@ def check_emby_exists(tmdb_id, media_type, season=0):
 # 📊 数据模型
 # ==========================================================
 class MediaRequestSubmitModel(BaseSubmitModel):
-    seasons: List[int] = [0] # 🎬 改为数组，支持前端多选
+    seasons: List[int] = [0] # 🎬 支持多季数组
     overview: Optional[str] = ""
 
 class AdminActionModel(BaseModel):
@@ -124,7 +128,7 @@ class AdminActionModel(BaseModel):
     reject_reason: Optional[str] = None
 
 class BulkAdminActionModel(BaseModel):
-    items: List[dict] # 批量格式: [{"tmdb_id": 123, "season": 1}, ...]
+    items: List[dict] 
     action: str
     reject_reason: Optional[str] = None
 
@@ -133,32 +137,22 @@ class RequestLoginModel(BaseModel):
     password: str
 
 # ==========================================================
-# 📡 权限认证接口 (修复 Session 冲突 BUG)
+# 📡 权限认证 (独立登出与 DeviceId 修复)
 # ==========================================================
 @router.post("/api/requests/auth")
 def request_system_login(data: RequestLoginModel, request: Request):
     host = cfg.get("emby_host")
     if not host: return {"status": "error", "message": "未配置 Emby 服务器"}
-    
-    # 🔥 核心修复：补上 Emby 强制要求的 DeviceId="PulseRequestApp"
-    headers = {
-        "X-Emby-Authorization": 'MediaBrowser Client="EmbyPulse", Device="Web", DeviceId="PulseRequestApp", Version="2.0"'
-    }
-    
+    # 🔥 必须包含 DeviceId 才能登录
+    headers = {"X-Emby-Authorization": 'MediaBrowser Client="EmbyPulse", Device="Web", DeviceId="PulseRequestApp", Version="2.0"'}
     try:
         res = requests.post(f"{host}/emby/Users/AuthenticateByName", json={"Username": data.username, "Pw": data.password}, headers=headers, timeout=8)
-        
         if res.status_code == 200:
             user_info = res.json().get("User", {})
             request.session["req_user"] = {"Id": user_info.get("Id"), "Name": user_info.get("Name")}
             return {"status": "success"}
-        else:
-            # 加入日志打印，万一再错能看到 Emby 具体的拒绝理由
-            print(f"❌ [映迹 Auth] 登录被 Emby 拒绝: 状态码 {res.status_code}, 返回值: {res.text}")
-            return {"status": "error", "message": "账号或密码错误"}
-            
-    except Exception as e: 
-        return {"status": "error", "message": f"无法连接到 Emby 服务: {str(e)}"}
+        return {"status": "error", "message": "账号或密码错误"}
+    except: return {"status": "error", "message": "无法连接到 Emby 服务"}
 
 @router.get("/api/requests/check")
 def check_auth(request: Request):
@@ -167,12 +161,12 @@ def check_auth(request: Request):
 
 @router.post("/api/requests/logout")
 def request_system_logout(request: Request):
-    # 🔥 核心修复：精准移除 req_user，不再使用暴力的 clear() 清空全局会话
+    # 🔥 精准销毁，绝不干扰管理员后台
     request.session.pop("req_user", None)
     return {"status": "success"}
 
 # ==========================================================
-# 🧭 TMDB 影视发现与搜索
+# 🧭 TMDB 发现与搜索
 # ==========================================================
 @router.get("/api/requests/trending")
 def get_trending():
@@ -214,7 +208,7 @@ def get_tv_details(tmdb_id: int):
     except Exception as e: return {"status": "error", "message": str(e)}
 
 # ==========================================================
-# ✍️ 用户求片提交与个人队列 (支持批量数组提交与查重防御)
+# ✍️ 用户求片提交 (多季数组并发处理)
 # ==========================================================
 @router.post("/api/requests/submit")
 def submit_media_request(data: MediaRequestSubmitModel, request: Request):
@@ -225,7 +219,6 @@ def submit_media_request(data: MediaRequestSubmitModel, request: Request):
     results = []
 
     for sn in data.seasons:
-        # 🔥 库内穿透防御：如果是电影或剧集对应的季在 Emby 中已存在，直接拦截
         if check_emby_exists(data.tmdb_id, data.media_type, sn):
             continue
 
@@ -234,10 +227,9 @@ def submit_media_request(data: MediaRequestSubmitModel, request: Request):
         existing = c.fetchone()
         
         if not existing:
-            # 严格匹配 6 个占位符
             execute_sql("INSERT INTO media_requests (tmdb_id, media_type, title, year, poster_path, status, season) VALUES (?, ?, ?, ?, ?, 0, ?)",
                        (data.tmdb_id, data.media_type, data.title, data.year, data.poster_path, sn))
-        elif existing[0] == 3: # 曾被拒绝的，允许重新提交
+        elif existing[0] == 3: 
             execute_sql("UPDATE media_requests SET status = 0, reject_reason = NULL WHERE tmdb_id = ? AND season = ?", (data.tmdb_id, sn))
         elif existing[0] == 2:
             continue
@@ -247,7 +239,6 @@ def submit_media_request(data: MediaRequestSubmitModel, request: Request):
 
     if not results: return {"status": "error", "message": "所选资源均已入库或正在排队中"}
 
-    # 🤖 满血版机器人通知 (汇总发送，携带简介与跳转链接)
     sn_tag = f"第 {', '.join(map(str, results))} 季" if data.media_type == 'tv' else "电影"
     overview_text = data.overview[:110] + "..." if data.overview and len(data.overview) > 110 else (data.overview or "无")
     
@@ -273,7 +264,7 @@ def get_my_requests(request: Request):
     return {"status": "success", "data": [{"tmdb_id": r[0], "title": r[1] + (f" (S{r[5]})" if r[6]=='tv' else ""), "year": r[2], "poster_path": r[3], "status": r[4], "season": r[5], "requested_at": r[7], "reject_reason": r[8]} for r in rows]}
 
 # ==========================================================
-# 👮 管理中心接口 (支持单体与新增的批量操作)
+# 👮 后台管理中心 (批量审批支持)
 # ==========================================================
 @router.get("/api/manage/requests")
 def get_all_requests(request: Request):
@@ -307,6 +298,5 @@ def batch_manage_action(data: BulkAdminActionModel, request: Request):
 
 @router.post("/api/manage/requests/action")
 def manage_request_action(data: AdminActionModel, request: Request):
-    # 兼容老版本单选点击，转换为批量处理逻辑
     batch_data = BulkAdminActionModel(items=[{"tmdb_id": data.tmdb_id, "season": data.season}], action=data.action, reject_reason=data.reject_reason)
     return batch_manage_action(batch_data, request)
