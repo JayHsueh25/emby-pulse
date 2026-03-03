@@ -49,7 +49,7 @@
 </head>
 <body class="flex h-screen overflow-hidden text-gray-800 bg-gray-50 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-300">
 
-    <aside class="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex-col hidden md:flex z-50 shadow-sm relative shrink-0 transition-colors duration-300">
+    <aside class="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex-col hidden md:flex z-40 shadow-sm relative shrink-0 transition-colors duration-300">
         
         <div class="h-32 flex flex-col items-center justify-center px-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
             <img src="/static/img/logo-light.png" alt="EmbyPulse" class="h-16 w-auto max-w-full object-contain block dark:hidden transition-opacity duration-300">
@@ -58,8 +58,15 @@
                 v{{ version }}
             </span>
         </div>
+
+        <div class="px-4 py-3">
+            <button onclick="openGlobalSearch()" class="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-500 dark:text-gray-400 transition-colors group shadow-sm">
+                <span class="flex items-center gap-2"><i class="fa-solid fa-magnifying-glass group-hover:text-blue-500 transition-colors"></i> 搜索媒体库</span>
+                <kbd class="text-[10px] font-mono font-bold bg-white dark:bg-gray-600 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-500 shadow-sm hidden lg:inline-block">Cmd+K</kbd>
+            </button>
+        </div>
         
-        <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto hide-scrollbar">
+        <nav class="flex-1 px-4 pb-6 space-y-2 overflow-y-auto hide-scrollbar">
             <a href="/" class="nav-item flex items-center px-4 py-3 rounded-lg transition hover:bg-gray-50 dark:hover:bg-gray-800 {% if active_page == 'dashboard' %}active{% else %}text-gray-500 dark:text-gray-400{% endif %}">
                 <i class="fa-solid fa-chart-line w-6"></i> <span class="ml-2">仪表盘</span>
             </a>
@@ -163,16 +170,41 @@
     </aside>
 
     <main class="flex-1 flex flex-col h-full overflow-hidden relative w-full">
-        <header class="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 md:hidden shrink-0 justify-between z-40 sticky top-0 transition-colors duration-300">
+        <header class="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 md:hidden shrink-0 justify-between z-30 sticky top-0 transition-colors duration-300">
             <button onclick="toggleSidebar()" class="text-gray-600 dark:text-gray-300 p-2 -ml-2"><i class="fa-solid fa-bars text-xl"></i></button>
             <span class="font-bold text-gray-800 dark:text-white">EmbyPulse</span>
-            <div class="w-8"></div>
+            <button onclick="openGlobalSearch()" class="text-gray-600 dark:text-gray-300 p-2 -mr-2 transition hover:text-blue-500"><i class="fa-solid fa-magnifying-glass text-lg"></i></button>
         </header>
 
         <div class="flex-1 overflow-y-auto overflow-x-hidden relative w-full custom-scrollbar bg-gray-50/50 dark:bg-gray-900">
             {% block content %}{% endblock %}
         </div>
     </main>
+
+    <div id="ep-global-search" class="fixed inset-0 z-[100] hidden opacity-0 transition-opacity duration-200">
+        <div class="absolute inset-0 bg-gray-900/60 dark:bg-black/80 backdrop-blur-sm" onclick="closeGlobalSearch()"></div>
+        
+        <div class="absolute top-[8%] left-1/2 -translate-x-1/2 w-[90%] max-w-3xl bg-white/95 dark:bg-gray-800/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col transform scale-95 transition-transform duration-200" id="ep-search-container">
+            
+            <div class="relative border-b border-gray-100 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50">
+                <i class="fa-solid fa-magnifying-glass absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 text-xl"></i>
+                <input type="text" id="ep-search-input" autocomplete="off" class="w-full bg-transparent border-none pl-14 pr-24 py-5 text-lg font-medium text-gray-900 dark:text-white focus:ring-0 placeholder-gray-400 outline-none" placeholder="输入影视名称、拼音穿透搜索...">
+                
+                <div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+                    <span id="ep-search-loading" class="hidden animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></span>
+                    <button onclick="closeGlobalSearch()" class="px-2 py-1 text-[11px] font-mono font-bold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 transition hidden sm:inline-block">ESC</button>
+                </div>
+            </div>
+
+            <div id="ep-search-results" class="max-h-[60vh] overflow-y-auto hide-scrollbar p-2">
+                <div class="text-center py-16 text-gray-400 dark:text-gray-500" id="ep-search-empty">
+                    <i class="fa-solid fa-clapperboard text-5xl mb-4 opacity-20"></i>
+                    <p class="text-sm font-medium">全局检索 Emby 媒体库深度信息</p>
+                    <p class="text-xs mt-2 opacity-60">支持解析 4K / HDR / 杜比视界 / 音轨声道</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
     {% block scripts %}{% endblock %}
     
@@ -201,6 +233,121 @@
                 localStorage.theme = 'dark';
             }
             window.dispatchEvent(new Event('theme-change'));
+        }
+
+        // ==========================================
+        // 🌟 全局 Spotlight 搜索逻辑 (原生 JS)
+        // ==========================================
+        const searchModal = document.getElementById('ep-global-search');
+        const searchContainer = document.getElementById('ep-search-container');
+        const searchInput = document.getElementById('ep-search-input');
+        const searchResults = document.getElementById('ep-search-results');
+        const searchLoading = document.getElementById('ep-search-loading');
+        const searchEmpty = document.getElementById('ep-search-empty');
+        let searchTimeout = null;
+
+        function openGlobalSearch() {
+            searchModal.classList.remove('hidden');
+            // 触发重绘以实现平滑动效
+            void searchModal.offsetWidth;
+            searchModal.classList.remove('opacity-0');
+            searchContainer.classList.remove('scale-95');
+            
+            searchInput.value = '';
+            searchResults.innerHTML = '';
+            searchResults.appendChild(searchEmpty);
+            searchEmpty.style.display = 'block';
+            
+            setTimeout(() => searchInput.focus(), 100);
+        }
+
+        function closeGlobalSearch() {
+            searchModal.classList.add('opacity-0');
+            searchContainer.classList.add('scale-95');
+            setTimeout(() => {
+                searchModal.classList.add('hidden');
+                searchInput.blur();
+            }, 200);
+        }
+
+        // 监听全局快捷键 (Ctrl+K / Cmd+K) 和 ESC 退弹窗
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                openGlobalSearch();
+            }
+            if (e.key === 'Escape' && !searchModal.classList.contains('hidden')) {
+                closeGlobalSearch();
+            }
+        });
+
+        // 输入防抖请求
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const query = e.target.value.trim();
+            
+            if (!query) {
+                searchResults.innerHTML = '';
+                searchResults.appendChild(searchEmpty);
+                searchEmpty.style.display = 'block';
+                return;
+            }
+
+            searchLoading.classList.remove('hidden');
+            searchEmpty.style.display = 'none';
+            
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/library/search?query=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    renderSearchResults(data.data || []);
+                } catch (err) {
+                    console.error(err);
+                    searchResults.innerHTML = '<div class="text-center py-10 text-red-500 font-medium">搜索请求失败，请检查网络或后端日志</div>';
+                } finally {
+                    searchLoading.classList.add('hidden');
+                }
+            }, 500); // 500ms 防抖，防止压垮 Emby
+        });
+
+        // 渲染酷炫的搜索结果卡片
+        function renderSearchResults(items) {
+            if (items.length === 0) {
+                searchResults.innerHTML = '<div class="text-center py-12 text-gray-500 dark:text-gray-400 font-medium">未在库中找到相关媒体资源 🤷‍♂️</div>';
+                return;
+            }
+
+            let html = '';
+            items.forEach(item => {
+                // 动态渲染特色徽章 (Badges)
+                let badgesHtml = item.badges.map(b => 
+                    `<span class="px-2 py-0.5 text-[10px] font-bold rounded-md border shadow-sm ${b.color}">${b.text}</span>`
+                ).join('');
+                
+                let typeIcon = item.type === 'movie' 
+                    ? '<i class="fa-solid fa-film text-blue-500"></i>' 
+                    : '<i class="fa-solid fa-tv text-purple-500"></i>';
+
+                html += `
+                    <div class="flex gap-4 p-3 mb-1 hover:bg-white dark:hover:bg-gray-700/60 rounded-xl cursor-default transition-all group border border-transparent hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-sm">
+                        <img src="${item.poster || '/static/img/logo-light.png'}" class="w-16 h-24 object-cover rounded-lg shadow-sm bg-gray-200 dark:bg-gray-800 shrink-0 border border-gray-100 dark:border-gray-700 group-hover:scale-105 transition-transform duration-300">
+                        <div class="flex-1 min-w-0 flex flex-col justify-between py-1">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    ${typeIcon}
+                                    <h4 class="font-bold text-base text-gray-900 dark:text-white truncate">${item.name}</h4>
+                                    <span class="text-xs text-gray-400 dark:text-gray-500 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 rounded">${item.year}</span>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed pr-2">${item.overview}</p>
+                            </div>
+                            <div class="flex flex-wrap gap-2 mt-2">
+                                ${badgesHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            searchResults.innerHTML = html;
         }
     </script>
 </body>
