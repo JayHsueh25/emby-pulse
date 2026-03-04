@@ -47,18 +47,15 @@ async def delete_blacklist(app_name: str):
     query_db("DELETE FROM client_blacklist WHERE app_name = ?", (app_name,))
     return {"status": "success"}
 
-# 🔥 修复：UTC 时间转东八区本地时间
+# UTC 时间转东八区本地时间
 def parse_emby_utc(date_str):
     if not date_str: return ""
     try:
-        # 截断毫秒和Z (如: 2024-03-04T05:00:00.0000000Z -> 2024-03-04T05:00:00)
         clean_str = date_str.split('.')[0].replace('Z', '')
         dt = datetime.datetime.strptime(clean_str, "%Y-%m-%dT%H:%M:%S")
-        # 自动+8小时转换为北京/台北时间
         local_dt = dt + datetime.timedelta(hours=8)
         return local_dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
-        # 异常备用方案
         return date_str.replace("T", " ").split(".")[0]
 
 @router.get("/api/clients/data")
@@ -71,11 +68,9 @@ async def get_clients_data(request: Request):
         return {"status": "error", "message": "Emby 配置未完成，请检查 config.yaml"}
 
     try:
-        # 获取所有设备
         res = requests.get(f"{host}/emby/Devices?api_key={key}", timeout=5)
         devices = res.json().get("Items", [])
         
-        # 获取活跃会话，提取当前播放的设备指纹
         sess_res = requests.get(f"{host}/emby/Sessions?api_key={key}", timeout=5)
         sessions = sess_res.json()
         active_sigs = [{
@@ -89,7 +84,6 @@ async def get_clients_data(request: Request):
     app_counts = {}
     top_devices = {}
     
-    # 获取图表数据（已更新为 TOP 10）
     try:
         pie_rows = query_db("SELECT COALESCE(ClientName, Client, '未知客户端') as c_name, COUNT(*) as cnt FROM PlaybackActivity WHERE c_name IS NOT NULL AND c_name != '' GROUP BY c_name")
         if pie_rows:
@@ -113,6 +107,8 @@ async def get_clients_data(request: Request):
     blacklist = [r['app_name'].lower() for r in blacklist_rows] if blacklist_rows else []
 
     table_data = []
+    now_utc = datetime.datetime.utcnow() # 获取当前 UTC 时间基准
+
     for d in devices:
         app_name = d.get("AppName") or "未知客户端"
         is_blocked = app_name.lower() in blacklist
@@ -120,19 +116,31 @@ async def get_clients_data(request: Request):
         last_active = parse_emby_utc(date_str) if date_str else "从未连接"
         last_user = d.get("LastUserName") or "未知用户"
         
-        # 🔥 修复：在线状态判定（支持模糊匹配跨越设备 ID 漂移）
+        # 🔥 新增：计算该设备的最后活动时间与现在的差值 (秒)
+        time_diff_sec = 9999999
+        if date_str:
+            try:
+                clean_str = date_str.split('.')[0].replace('Z', '')
+                dt = datetime.datetime.strptime(clean_str, "%Y-%m-%dT%H:%M:%S")
+                time_diff_sec = abs((now_utc - dt).total_seconds())
+            except Exception:
+                pass
+
         d_id = d.get("Id", "")
         is_active = False
+        
         for sig in active_sigs:
-            # 1. 强匹配: DeviceId 直接匹配
+            # 1. 强匹配: DeviceId 直接一致（最准确）
             if d_id and sig["device_id"] and d_id == sig["device_id"]:
                 is_active = True
                 break
-            # 2. 弱匹配: 专治 Infuse 等第三方工具 ID 漂移 (客户端名称 + 用户名 完全一致则认为在线)
+                
+            # 2. 弱匹配防多开: 软件名一致 + 用户名一致 + 【关键：最近15分钟内必须有过活动数据上报】
             if app_name and sig["client"] and last_user and sig["user_name"]:
                 if app_name.lower() == sig["client"].lower() and last_user.lower() == sig["user_name"].lower():
-                    is_active = True
-                    break
+                    if time_diff_sec <= 900: # 900秒 = 15分钟，防止时间漂移过严导致误杀
+                        is_active = True
+                        break
         
         table_data.append({
             "id": d_id,
@@ -144,7 +152,6 @@ async def get_clients_data(request: Request):
             "is_blocked": is_blocked
         })
 
-    # 按时间倒序
     table_data.sort(key=lambda x: x["last_active"], reverse=True)
 
     return {
