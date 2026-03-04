@@ -19,7 +19,6 @@ def ensure_invitations_schema():
         c.execute("PRAGMA table_info(invitations)")
         cols = [col[1] for col in c.fetchall()]
         if cols:
-            # 静默修补缺失的字段，兼容老用户的旧表
             if 'used_count' not in cols: c.execute("ALTER TABLE invitations ADD COLUMN used_count INTEGER DEFAULT 0")
             if 'max_uses' not in cols: c.execute("ALTER TABLE invitations ADD COLUMN max_uses INTEGER DEFAULT 1")
             if 'used_by' not in cols: c.execute("ALTER TABLE invitations ADD COLUMN used_by TEXT")
@@ -31,7 +30,6 @@ def ensure_invitations_schema():
     except Exception as e:
         print(f"Upgrade invitations table error: {e}")
 
-# 启动时执行表结构自检
 ensure_invitations_schema()
 
 
@@ -43,7 +41,6 @@ async def api_register(data: UserRegisterModel):
         if not invite:
             return JSONResponse(content={"status": "error", "message": "无效的邀请码"})
         
-        # 🔥 容错处理：防止旧数据为 NULL 导致类型报错
         used_count = invite['used_count'] if invite['used_count'] is not None else 0
         max_uses = invite['max_uses'] if invite['max_uses'] is not None else 1
         
@@ -68,7 +65,7 @@ async def api_register(data: UserRegisterModel):
             requests.delete(f"{host}/emby/Users/{new_id}?api_key={key}")
             return JSONResponse(content={"status": "error", "message": "密码设置失败"})
 
-        # 5. 初始化策略 (启用账户 + 静默继承权限模板)
+        # 5. 初始化策略 (启用账户 + 完美继承模板的所有高级权限)
         p_res = requests.get(f"{host}/emby/Users/{new_id}?api_key={key}")
         policy = p_res.json().get('Policy', {}) if p_res.status_code == 200 else {}
         
@@ -83,8 +80,20 @@ async def api_register(data: UserRegisterModel):
                 src_res = requests.get(f"{host}/emby/Users/{template_id}?api_key={key}", timeout=5)
                 if src_res.status_code == 200:
                     src_policy = src_res.json().get('Policy', {})
+                    
+                    # 5.1 继承媒体库访问权限
                     policy['EnableAllFolders'] = src_policy.get('EnableAllFolders', True)
                     policy['EnabledFolders'] = src_policy.get('EnabledFolders', [])
+                    policy['ExcludedSubFolders'] = src_policy.get('ExcludedSubFolders', [])
+                    
+                    # 🔥 5.2 继承高级策略 (下载与转码)
+                    policy['EnableContentDownloading'] = src_policy.get('EnableContentDownloading', True)
+                    policy['EnableVideoPlaybackTranscoding'] = src_policy.get('EnableVideoPlaybackTranscoding', True)
+                    policy['EnableAudioPlaybackTranscoding'] = src_policy.get('EnableAudioPlaybackTranscoding', True)
+                    
+                    # 🔥 5.3 继承家长控制 (年龄分级)
+                    if 'MaxParentalRating' in src_policy:
+                        policy['MaxParentalRating'] = src_policy['MaxParentalRating']
             except: pass
             
         requests.post(f"{host}/emby/Users/{new_id}/Policy?api_key={key}", json=policy)
@@ -97,8 +106,7 @@ async def api_register(data: UserRegisterModel):
             query_db("INSERT INTO users_meta (user_id, expire_date, created_at) VALUES (?, ?, ?)", 
                      (new_id, expire_date, datetime.datetime.now().isoformat()))
 
-        # 7. 🔥 致命修复：更新使用次数、使用者记录及状态
-        # 加入 COALESCE 防爆改设计，即使字段是 NULL 也能正确执行 0+1
+        # 7. 更新使用次数、使用者记录及状态
         used_at = datetime.datetime.now().isoformat()
         query_db(
             "UPDATE invitations SET used_count = COALESCE(used_count, 0) + 1, used_by = ?, used_at = ?, status = 1 WHERE code = ?", 
