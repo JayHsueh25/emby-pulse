@@ -18,47 +18,54 @@
         </button>
     </div>
 
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6" id="stats-cards-container">
+        </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/60 p-4 md:p-5 lg:col-span-1">
             <h3 class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                <i class="fa-solid fa-chart-pie text-blue-500"></i> 客户端生态分布
+                <i class="fa-solid fa-chart-pie text-blue-500"></i> 客户端生态分布 <span class="text-[10px] text-gray-400 font-normal ml-auto">点击图块筛选</span>
             </h3>
-            <div class="relative h-48 w-full flex items-center justify-center">
-                <canvas id="clientPieChart"></canvas>
+            <div class="relative h-[280px] w-full flex items-center justify-center">
+                <canvas id="clientPieChart" class="cursor-pointer"></canvas>
             </div>
         </div>
 
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/60 p-4 md:p-5 lg:col-span-2">
             <h3 class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                <i class="fa-solid fa-ranking-star text-amber-500"></i> 历史高频设备 TOP 5
+                <i class="fa-solid fa-ranking-star text-amber-500"></i> 历史高频设备 TOP 5 <span class="text-[10px] text-gray-400 font-normal ml-auto">点击图块筛选</span>
             </h3>
-            <div class="relative h-48 w-full">
-                <canvas id="deviceBarChart"></canvas>
+            <div class="relative h-[280px] w-full">
+                <canvas id="deviceBarChart" class="cursor-pointer"></canvas>
             </div>
         </div>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/60 overflow-hidden">
-        <div class="px-4 md:px-5 py-4 border-b border-gray-100 dark:border-gray-700/50 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/30">
-            <h3 class="font-bold text-gray-800 dark:text-gray-100 text-sm">全服已接入设备列表</h3>
-            <button onclick="fetchClientsData()" class="text-xs text-indigo-500 hover:text-indigo-600 font-bold flex items-center gap-1 transition-colors">
+    <div id="devices-table-container" class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700/60 overflow-hidden scroll-mt-20">
+        <div class="px-4 md:px-5 py-4 border-b border-gray-100 dark:border-gray-700/50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-800/30">
+            <div class="flex items-center gap-3">
+                <h3 class="font-bold text-gray-800 dark:text-gray-100 text-sm">全服已接入设备列表</h3>
+                <div id="filter-tag-container"></div>
+            </div>
+            <button onclick="fetchClientsData()" class="text-xs text-indigo-500 hover:text-indigo-600 font-bold flex items-center gap-1 transition-colors self-start sm:self-auto">
                 <i class="fa-solid fa-rotate"></i> 刷新列表
             </button>
         </div>
         
         <div class="overflow-x-auto custom-scroll">
-            <table class="w-full min-w-[700px] text-left text-sm text-gray-500 dark:text-gray-400">
+            <table class="w-full min-w-[800px] text-left text-sm text-gray-500 dark:text-gray-400">
                 <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-900/50 dark:text-gray-400">
                     <tr>
+                        <th class="px-4 md:px-6 py-3 whitespace-nowrap">最后活动用户</th>
                         <th class="px-4 md:px-6 py-3 whitespace-nowrap">设备名称 / ID</th>
                         <th class="px-4 md:px-6 py-3 whitespace-nowrap">使用软件 (AppName)</th>
                         <th class="px-4 md:px-6 py-3 whitespace-nowrap">最后活动时间</th>
-                        <th class="px-4 md:px-6 py-3 whitespace-nowrap text-right">授权状态 (拉黑)</th>
+                        <th class="px-4 md:px-6 py-3 whitespace-nowrap text-right">授权状态</th>
                     </tr>
                 </thead>
                 <tbody id="devices-tbody">
                     <tr>
-                        <td colspan="4" class="px-6 py-8 text-center text-gray-400">正在准备加载设备数据...</td>
+                        <td colspan="5" class="px-6 py-8 text-center text-gray-400">正在准备加载设备数据...</td>
                     </tr>
                 </tbody>
             </table>
@@ -69,7 +76,6 @@
 <div id="blacklist-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleBlacklistModal()"></div>
     <div class="relative w-full max-w-lg bg-white dark:bg-gray-900 shadow-2xl rounded-2xl overflow-hidden transition-all duration-300 scale-95 opacity-0" id="blacklist-container">
-        
         <div class="px-5 md:px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
             <h3 class="font-black text-base md:text-lg text-gray-900 dark:text-white flex items-center gap-2">
                 <i class="fa-solid fa-ban text-red-500"></i> 软件黑名单配置
@@ -78,7 +84,6 @@
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
         </div>
-        
         <div class="p-5 md:p-6">
             <div class="flex flex-col sm:flex-row gap-2 mb-6">
                 <input type="text" id="new-block-app" placeholder="输入要封杀的软件名 (如 Fileball)" class="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm outline-none focus:border-red-500 dark:focus:border-red-500 transition-colors">
@@ -86,29 +91,24 @@
                     添加拦截
                 </button>
             </div>
-            
             <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">当前已封杀名单</div>
             <ul class="space-y-2 max-h-48 overflow-y-auto custom-scroll" id="blacklist-ul">
                 <li class="text-center text-xs text-gray-400 py-4">加载中...</li>
             </ul>
         </div>
-        
         <div class="p-5 md:p-6 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800">
             <div class="mb-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-lg p-4 shadow-sm">
                 <div class="flex items-start">
-                    <div class="shrink-0 mt-0.5">
-                        <i class="fa-solid fa-triangle-exclamation text-red-500 text-lg"></i>
-                    </div>
+                    <div class="shrink-0 mt-0.5"><i class="fa-solid fa-triangle-exclamation text-red-500 text-lg"></i></div>
                     <div class="ml-3">
                         <h3 class="text-sm font-black text-red-800 dark:text-red-400 uppercase tracking-widest">高危操作警告</h3>
                         <p class="mt-1 text-xs text-red-700 dark:text-red-300 leading-relaxed">
                             执行阻断将<strong class="font-black text-red-600 dark:text-red-400">永久注销</strong>名单内所有客户端在 Emby 端的登录凭证。<br>
-                            即使将来移出黑名单，对方仍需<strong class="underline decoration-red-500">重新输入账号密码</strong>方可恢复使用！
+                            即使将来移出黑名单，对方仍需<strong class="underline decoration-red-500">重新登录</strong>方可恢复使用！
                         </p>
                     </div>
                 </div>
             </div>
-            
             <button id="execute-btn" onclick="executeBlock()" class="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-black shadow-lg shadow-red-500/30 active:scale-95 transition-all flex justify-center items-center gap-2">
                 <i class="fa-solid fa-bolt"></i> 我已了解风险，立即全服扫荡
             </button>
@@ -119,6 +119,7 @@
 <script>
 let pieChartInstance = null;
 let barChartInstance = null;
+let allDevicesData = []; // 缓存在内存中的全量设备数据
 
 document.addEventListener('DOMContentLoaded', () => {
     fetchClientsData();
@@ -131,11 +132,46 @@ async function fetchClientsData() {
         const data = await res.json();
         if (data.status !== 'success') throw new Error(data.message);
         
+        allDevicesData = data.devices; // 保存全量数据用于筛选
+        renderStatsCards(allDevicesData);
         renderCharts(data.charts);
-        renderTable(data.devices);
+        renderTable(allDevicesData);
+        clearFilterTag(); // 刷新时清除筛选
     } catch (e) {
-        document.getElementById('devices-tbody').innerHTML = `<tr><td colspan="4" class="px-6 py-8 text-center text-red-500">${e.message}</td></tr>`;
+        document.getElementById('devices-tbody').innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-red-500">${e.message}</td></tr>`;
     }
+}
+
+// 渲染顶部数据大盘
+function renderStatsCards(devices) {
+    const total = devices.length;
+    const online = devices.filter(d => d.is_active).length;
+    const blocked = devices.filter(d => d.is_blocked).length;
+
+    const html = `
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700/60 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">历史设备总数</p>
+                <h3 class="text-2xl font-black text-gray-900 dark:text-white mt-1">${total} <span class="text-sm font-normal text-gray-400">台</span></h3>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-xl"><i class="fa-solid fa-server"></i></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700/60 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">当前在线设备</p>
+                <h3 class="text-2xl font-black text-gray-900 dark:text-white mt-1">${online} <span class="text-sm font-normal text-gray-400">台</span></h3>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-green-50 dark:bg-green-500/10 flex items-center justify-center text-green-500 text-xl"><i class="fa-solid fa-signal"></i></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700/60 shadow-sm flex items-center justify-between">
+            <div>
+                <p class="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">已拦截设备</p>
+                <h3 class="text-2xl font-black text-red-600 dark:text-red-400 mt-1">${blocked} <span class="text-sm font-normal text-gray-400">台</span></h3>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500 text-xl"><i class="fa-solid fa-ban"></i></div>
+        </div>
+    `;
+    document.getElementById('stats-cards-container').innerHTML = html;
 }
 
 function renderCharts(charts) {
@@ -155,9 +191,9 @@ function renderCharts(charts) {
             labels: charts.pie.labels,
             datasets: [{
                 data: charts.pie.data,
-                backgroundColor: ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                backgroundColor: ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'],
                 borderWidth: 0,
-                hoverOffset: 4
+                hoverOffset: 6
             }]
         },
         options: {
@@ -165,11 +201,18 @@ function renderCharts(charts) {
             maintainAspectRatio: false,
             plugins: { 
                 legend: { 
-                    position: 'right', 
-                    labels: { boxWidth: 12, font: { size: 10 }, color: textColor } 
-                } 
+                    position: 'bottom', // 🔥 图例放到底部，释放空间
+                    labels: { boxWidth: 12, padding: 15, font: { size: 11 }, color: textColor } 
+                },
+                tooltip: { padding: 10, cornerRadius: 8 }
             },
-            cutout: '70%'
+            cutout: '65%',
+            onClick: (e, elements, chart) => {
+                if (elements.length > 0) {
+                    const label = chart.data.labels[elements[0].index];
+                    filterTableData('app_name', label);
+                }
+            }
         }
     });
 
@@ -181,47 +224,86 @@ function renderCharts(charts) {
                 label: '历史播放次数',
                 data: charts.bar.data,
                 backgroundColor: '#f59e0b',
-                borderRadius: 4
+                borderRadius: 6,
+                hoverBackgroundColor: '#d97706'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { 
+                legend: { display: false },
+                tooltip: { padding: 10, cornerRadius: 8 }
+            },
             scales: {
-                y: { 
-                    beginAtZero: true, 
-                    grid: { color: gridColor },
-                    ticks: { color: textColor }
-                },
-                x: { 
-                    grid: { display: false }, 
-                    ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 0, color: textColor } 
+                y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+                x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 25, minRotation: 0, color: textColor } }
+            },
+            onClick: (e, elements, chart) => {
+                if (elements.length > 0) {
+                    const label = chart.data.labels[elements[0].index];
+                    filterTableData('name', label);
                 }
             }
         }
     });
 }
 
+// 🔥 核心功能：表格筛选联动
+function filterTableData(filterKey, filterValue) {
+    const filtered = allDevicesData.filter(d => d[filterKey] === filterValue);
+    renderTable(filtered);
+    
+    // 渲染顶部的筛选提示标签
+    const tagContainer = document.getElementById('filter-tag-container');
+    const labelName = filterKey === 'app_name' ? '软件' : '设备';
+    tagContainer.innerHTML = `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold border border-indigo-100 dark:border-indigo-500/30 animate-pulse-once">
+            <i class="fa-solid fa-filter"></i> ${labelName}: ${filterValue}
+            <button onclick="clearFilter()" class="ml-1 text-indigo-400 hover:text-indigo-600 dark:hover:text-white transition-colors"><i class="fa-solid fa-xmark"></i></button>
+        </span>
+    `;
+    
+    // 平滑滚动到表格区域
+    document.getElementById('devices-table-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function clearFilter() {
+    renderTable(allDevicesData);
+    clearFilterTag();
+}
+
+function clearFilterTag() {
+    document.getElementById('filter-tag-container').innerHTML = '';
+}
+
 function renderTable(devices) {
     const tbody = document.getElementById('devices-tbody');
     if (devices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-gray-400">暂无任何设备连接记录</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-gray-400">未找到匹配的设备记录</td></tr>';
         return;
     }
     
     tbody.innerHTML = devices.map(d => `
         <tr class="bg-white dark:bg-gray-800 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
             <td class="px-4 md:px-6 py-4">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-xs shadow-inner">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <span class="font-bold text-gray-800 dark:text-gray-200 whitespace-nowrap">${d.last_user}</span>
+                </div>
+            </td>
+            <td class="px-4 md:px-6 py-4">
                 <div class="flex items-center gap-2">
                     <div class="w-2 h-2 shrink-0 rounded-full ${d.is_active ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'bg-gray-300 dark:bg-gray-600'}"></div>
-                    <span class="font-bold text-gray-900 dark:text-gray-200 truncate max-w-[120px] md:max-w-none" title="${d.name}">${d.name}</span>
+                    <span class="font-medium text-gray-900 dark:text-gray-200 truncate max-w-[140px] md:max-w-none" title="${d.name}">${d.name}</span>
                 </div>
             </td>
             <td class="px-4 md:px-6 py-4">
                 <span class="px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-mono text-xs border border-blue-100 dark:border-blue-800/30 whitespace-nowrap">${d.app_name}</span>
             </td>
-            <td class="px-4 md:px-6 py-4 text-xs font-mono text-gray-400 whitespace-nowrap">${d.last_activity}</td>
+            <td class="px-4 md:px-6 py-4 text-xs font-mono text-gray-400 whitespace-nowrap">${d.last_active}</td>
             <td class="px-4 md:px-6 py-4 text-right whitespace-nowrap">
                 ${d.is_blocked 
                     ? '<span class="text-red-500 font-bold text-xs"><i class="fa-solid fa-ban"></i> 违规拦截</span>' 
@@ -318,5 +400,13 @@ document.getElementById('new-block-app').addEventListener('keypress', function (
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     .dark .custom-scroll::-webkit-scrollbar-thumb { background: #475569; }
+    
+    /* 筛选标签出现的微动画 */
+    @keyframes pulse-once {
+        0% { transform: scale(0.95); opacity: 0.5; }
+        50% { transform: scale(1.05); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pulse-once { animation: pulse-once 0.3s ease-out forwards; }
 </style>
 {% endblock %}

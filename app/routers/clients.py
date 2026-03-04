@@ -68,7 +68,7 @@ async def get_clients_data(request: Request):
     app_counts = {}
     top_devices = {}
     
-    # 🔥 核心修复：使用 COALESCE(ClientName, Client) 挖掘真实数据，过滤空值
+    # 提取真实客户端与设备数据
     try:
         pie_rows = query_db("SELECT COALESCE(ClientName, Client, '未知客户端') as c_name, COUNT(*) as cnt FROM PlaybackActivity WHERE c_name IS NOT NULL AND c_name != '' GROUP BY c_name")
         if pie_rows:
@@ -97,17 +97,19 @@ async def get_clients_data(request: Request):
         is_blocked = app_name.lower() in blacklist
         date_str = d.get("DateLastActivity", "")
         last_active = date_str.replace("T", " ").split(".")[0] if date_str else "从未连接"
+        last_user = d.get("LastUserName") or "未知用户" # 🔥 新增：获取最后登录用户
         
         table_data.append({
             "id": d.get("Id"),
             "name": d.get("Name") or "未知设备",
             "app_name": app_name,
-            "last_activity": last_active,
+            "last_active": last_active,
+            "last_user": last_user,
             "is_active": d.get("Id") in active_device_ids,
             "is_blocked": is_blocked
         })
 
-    table_data.sort(key=lambda x: x["last_activity"], reverse=True)
+    table_data.sort(key=lambda x: x["last_active"], reverse=True)
 
     return {
         "status": "success",
