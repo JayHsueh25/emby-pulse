@@ -2,18 +2,17 @@
 {% block title %}内容风云榜 - EmbyPulse{% endblock %}
 {% block head %}
 <style>
-    /* 极简克制的前三名特效 */
-    .podium-card { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-    .podium-card:hover { transform: translateY(-5px); z-index: 30; }
+    /* 领奖台呼吸特效 */
+    .podium-card { transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .podium-card:hover { transform: translateY(-8px); z-index: 30; }
     
-    .rank-1-border { border: 2px solid #f59e0b; box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.3); }
-    .rank-2-border { border: 2px solid #cbd5e1; box-shadow: 0 10px 30px -10px rgba(203, 213, 225, 0.2); }
-    .rank-3-border { border: 2px solid #b45309; box-shadow: 0 10px 30px -10px rgba(180, 83, 9, 0.2); }
+    .rank-1-border { border: 2px solid rgba(245, 158, 11, 0.8); box-shadow: 0 15px 35px -10px rgba(245, 158, 11, 0.4); }
+    .rank-2-border { border: 2px solid rgba(203, 213, 225, 0.8); box-shadow: 0 15px 35px -10px rgba(203, 213, 225, 0.3); }
+    .rank-3-border { border: 2px solid rgba(180, 83, 9, 0.8); box-shadow: 0 15px 35px -10px rgba(180, 83, 9, 0.3); }
 
-    /* 皇冠微动 */
     .crown-icon { 
-        position: absolute; top: -18px; left: 50%; transform: translateX(-50%); 
-        font-size: 1.5rem; color: #f59e0b; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); 
+        position: absolute; top: -20px; left: 50%; transform: translateX(-50%); 
+        font-size: 1.8rem; color: #f59e0b; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.3)); 
         z-index: 20; 
     }
 </style>
@@ -52,14 +51,15 @@
         
         <div class="flex flex-row items-end justify-center gap-3 md:gap-8 px-2" id="podium-section"></div>
 
-        <div class="bg-white dark:bg-gray-800 rounded-3xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden max-w-5xl mx-auto w-full">
-            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/80 flex justify-between items-center">
-                <h3 class="font-bold text-gray-800 dark:text-gray-200 text-sm tracking-wide flex items-center gap-2">
-                    <i class="fa-solid fa-list-ul text-gray-400"></i> 热播入围名单
+        <div class="max-w-5xl mx-auto w-full">
+            <div class="flex justify-between items-center mb-4 px-2">
+                <h3 class="font-bold text-gray-700 dark:text-gray-300 text-sm tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-layer-group text-gray-400"></i> 极客入围名单
                 </h3>
-                <span class="text-xs font-mono font-bold text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-2.5 py-1 rounded-md shadow-sm">Top 4 - 50</span>
+                <span class="text-[10px] md:text-xs font-mono font-bold text-gray-500 bg-gray-200/50 dark:bg-gray-800 px-2.5 py-1 rounded-md">Top 4 - 50</span>
             </div>
-            <div id="list-section" class="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-x-4 p-0 md:p-4 divide-y md:divide-y-0 divide-gray-100 dark:divide-gray-700/50"></div>
+            
+            <div id="list-section" class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4"></div>
         </div>
     </div>
 </div>
@@ -135,7 +135,7 @@
                 loading.classList.add('hidden'); 
                 content.classList.remove('hidden');
             } else {
-                loading.innerHTML = `<div class="py-10"><i class="fa-solid fa-ghost text-5xl text-gray-200 dark:text-gray-700 mb-4"></i><p class="text-sm font-bold text-gray-400">该维度下暂无播放记录</p></div>`;
+                loading.innerHTML = `<div class="py-10"><i class="fa-solid fa-ghost text-5xl text-gray-300 dark:text-gray-700 mb-4"></i><p class="text-sm font-bold text-gray-400">该维度下暂无播放记录</p></div>`;
             }
         } catch (e) { 
             console.error(e); 
@@ -148,41 +148,44 @@
         let html = '';
         
         items.forEach(item => {
-            // 🔥 接入三级防御智能图片接口
             const imgUrl = `/api/proxy/smart_image?item_id=${item.ItemId}&name=${encodeURIComponent(item.ItemName)}&type=Primary`;
             
             const isFirst = item.rank === 1;
-            let widthClass = isFirst ? 'w-[36%] md:w-56' : 'w-[28%] md:w-40';
-            let heightClass = isFirst ? 'aspect-[2/3] md:h-80' : 'aspect-[2/3] md:h-60 opacity-90 hover:opacity-100'; 
+            let widthClass = isFirst ? 'w-[38%] md:w-60' : 'w-[28%] md:w-44';
+            let heightClass = isFirst ? 'aspect-[2/3] md:h-80' : 'aspect-[2/3] md:h-64 opacity-95 hover:opacity-100'; 
             let borderClass = `rank-${item.rank}-border`;
             
             let crownHtml = isFirst ? '<i class="fa-solid fa-crown crown-icon"></i>' : '';
             let rankColors = {
-                1: 'bg-amber-500 text-white',
-                2: 'bg-gray-300 text-gray-700 dark:bg-gray-600 dark:text-gray-200',
-                3: 'bg-orange-600 text-white'
+                1: 'bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-md shadow-amber-500/40',
+                2: 'bg-gradient-to-r from-slate-300 to-slate-400 text-slate-800 shadow-md',
+                3: 'bg-gradient-to-r from-orange-500 to-orange-700 text-white shadow-md'
             };
             
             let orderClass = '';
-            if (item.rank === 1) orderClass = 'order-2 z-20 -mx-1 md:-mx-2 mb-1 md:mb-2'; 
+            if (item.rank === 1) orderClass = 'order-2 z-20 -mx-1 md:-mx-3 mb-1 md:mb-3'; 
             if (item.rank === 2) orderClass = 'order-1 z-10';       
             if (item.rank === 3) orderClass = 'order-3 z-10';       
 
+            // 🔥 新增：Top 3 补充播放时长
             html += `
-            <div class="podium-card relative flex flex-col items-center group shrink-0 ${orderClass} ${widthClass}">
+            <div class="podium-card relative flex flex-col items-center group shrink-0 ${orderClass} ${widthClass} cursor-pointer">
                 ${crownHtml}
-                <div class="relative w-full rounded-2xl overflow-hidden ${borderClass} ${heightClass} bg-gray-100 dark:bg-gray-800 shadow-xl">
-                    <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" loading="lazy">
+                <div class="relative w-full rounded-2xl overflow-hidden ${borderClass} ${heightClass} bg-gray-200 dark:bg-gray-800 shadow-xl">
+                    <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-110 transition duration-700 ease-out" loading="lazy">
                     
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-90"></div>
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent opacity-90 group-hover:opacity-100 transition-opacity"></div>
                     
-                    <div class="absolute bottom-0 left-0 right-0 p-3 md:p-4 text-center">
-                        <div class="inline-block ${rankColors[item.rank]} text-[10px] md:text-xs font-black px-2 py-0.5 rounded shadow-sm mb-1.5">
-                            #${item.rank}
+                    <div class="absolute bottom-0 left-0 right-0 p-3 md:p-5 text-center">
+                        <div class="inline-block ${rankColors[item.rank]} text-[10px] md:text-xs font-black px-2 md:px-3 py-0.5 rounded-md mb-1.5 md:mb-2 tracking-wide">
+                            TOP ${item.rank}
                         </div>
                         <h3 class="text-white font-bold text-xs md:text-base line-clamp-2 leading-tight drop-shadow-md mb-1">${item.ItemName}</h3>
-                        <div class="flex items-center justify-center gap-2 text-gray-300 text-[10px] font-mono">
-                            <span>${item.PlayCount} 次</span>
+                        
+                        <div class="flex items-center justify-center gap-1.5 text-gray-300 text-[9px] md:text-[11px] font-mono opacity-90 mt-1.5">
+                            <span class="flex items-center"><i class="fa-solid fa-play text-gray-400 mr-1 text-[8px]"></i>${item.PlayCount}</span>
+                            <span class="text-white/20">|</span>
+                            <span class="flex items-center"><i class="fa-regular fa-clock text-gray-400 mr-1 text-[9px]"></i>${Math.round(item.TotalTime/60)}m</span>
                         </div>
                     </div>
                 </div>
@@ -204,29 +207,29 @@
             const imgUrl = `/api/proxy/smart_image?item_id=${item.ItemId}&name=${encodeURIComponent(item.ItemName)}&type=Primary`;
             const percent = Math.min((item.PlayCount / maxPlayCount) * 100, 100);
 
+            // 🔥 Bento 卡片设计：悬浮质感、内置进度条、精美徽章
             html += `
-            <div class="relative flex items-center p-3 md:p-3.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group cursor-default md:rounded-2xl md:border md:border-transparent md:hover:border-gray-200 md:dark:hover:border-gray-600">
+            <div class="relative bg-white dark:bg-gray-800 rounded-2xl p-2.5 md:p-3 flex items-center gap-3 md:gap-4 border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-100 dark:hover:border-indigo-900/50 transition-all duration-300 overflow-hidden group cursor-default">
                 
-                <div class="absolute bottom-0 left-0 h-0.5 bg-indigo-500/30 dark:bg-indigo-500/50 group-hover:bg-indigo-500 transition-colors" style="width: ${percent}%;"></div>
+                <div class="absolute left-0 top-0 bottom-0 bg-indigo-50/60 dark:bg-indigo-900/20 z-0 transition-all duration-700" style="width: ${percent}%;"></div>
                 
-                <div class="w-8 text-center font-bold text-gray-400/70 dark:text-gray-500 text-sm md:text-lg mr-2 md:mr-3 italic group-hover:text-indigo-500 transition-colors">
+                <div class="relative z-10 w-7 md:w-10 text-center font-black text-xl md:text-2xl italic text-gray-300 dark:text-gray-600 group-hover:text-indigo-400 transition-colors">
                     ${rank}
                 </div>
                 
-                <div class="w-10 h-14 md:w-12 md:h-16 rounded-md bg-gray-200 dark:bg-gray-800 overflow-hidden shrink-0 mr-3 shadow-sm border border-gray-100 dark:border-gray-700">
-                     <img src="${imgUrl}" class="w-full h-full object-cover" loading="lazy">
+                <div class="relative z-10 w-11 h-16 md:w-14 md:h-20 rounded-xl overflow-hidden shadow-sm shrink-0 border border-gray-100 dark:border-gray-700 bg-gray-200 dark:bg-gray-800">
+                    <img src="${imgUrl}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy">
                 </div>
                 
-                <div class="flex-1 min-w-0 pr-2">
-                    <h4 class="text-sm font-bold text-gray-800 dark:text-gray-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
-                        ${item.ItemName}
-                    </h4>
-                    <div class="flex items-center gap-3 text-[10px] md:text-xs text-gray-500 dark:text-gray-400 font-mono">
-                        <span class="flex items-center gap-1">
-                            <i class="fa-solid fa-play text-[9px]"></i> ${item.PlayCount}
+                <div class="relative z-10 flex-1 min-w-0 pr-2">
+                    <h4 class="text-sm md:text-base font-bold text-gray-800 dark:text-gray-100 truncate mb-1.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">${item.ItemName}</h4>
+                    
+                    <div class="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs font-medium text-gray-600 dark:text-gray-400">
+                        <span class="bg-gray-100 dark:bg-gray-900/80 px-2 py-1 rounded-md shadow-inner flex items-center gap-1 border border-gray-200/50 dark:border-gray-700/50">
+                            <i class="fa-solid fa-fire text-orange-500 text-[10px]"></i> ${item.PlayCount} 次
                         </span>
-                        <span class="flex items-center gap-1 opacity-70">
-                            <i class="fa-regular fa-clock text-[10px]"></i> ${Math.round(item.TotalTime/60)}m
+                        <span class="bg-gray-100 dark:bg-gray-900/80 px-2 py-1 rounded-md shadow-inner flex items-center gap-1 border border-gray-200/50 dark:border-gray-700/50">
+                            <i class="fa-regular fa-clock text-blue-500 text-[10px]"></i> ${Math.round(item.TotalTime/60)} 分钟
                         </span>
                     </div>
                 </div>
