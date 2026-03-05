@@ -21,39 +21,23 @@
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     }
 
+    /* 悬停穿透样式 */
+    .user-rank-card { transition: all 0.2s ease; cursor: pointer; }
+    .user-rank-card:hover { transform: translateX(4px); background-color: rgba(99, 102, 241, 0.05); border-color: rgba(99, 102, 241, 0.2); }
+    html.dark .user-rank-card:hover { background-color: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.3); }
+    .user-rank-arrow { opacity: 0; transform: translateX(-10px); transition: all 0.3s ease; }
+    .user-rank-card:hover .user-rank-arrow { opacity: 1; transform: translateX(0); }
+
     @media (min-width: 768px) {
-        .glass-card:hover { 
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); 
-        }
-        
-        .md-fluid-grid-poster {
-            display: grid !important;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
-            gap: 1.25rem;
-        }
-        .md-fluid-grid-lib {
-            display: grid !important;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
-            gap: 1.5rem;
-        }
+        .glass-card:hover { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
+        .md-fluid-grid-poster { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1.25rem; }
+        .md-fluid-grid-lib { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
     }
 
     @media (max-width: 767px) {
-        .mobile-borderless {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-            border-radius: 0 !important;
-        }
-        .stat-card-mobile {
-            padding: 16px !important; 
-            margin-bottom: 0 !important;
-        }
-        .section-title-mobile {
-            margin-bottom: 12px !important;
-            padding-left: 4px;
-        }
+        .mobile-borderless { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
+        .stat-card-mobile { padding: 16px !important; margin-bottom: 0 !important; }
+        .section-title-mobile { margin-bottom: 12px !important; padding-left: 4px; }
     }
 </style>
 {% endblock %}
@@ -62,14 +46,12 @@
 <div class="w-full px-3 sm:px-6 md:px-10 py-6 md:py-8 pb-32 max-w-[3000px] mx-auto space-y-6 md:space-y-10">
     
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
-        
         <div>
             <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 dark:text-white tracking-tight">数据概览</h2>
             <div class="text-xs md:text-sm text-gray-500 mt-1.5 font-bold uppercase tracking-wider" id="current-date">...</div>
         </div>
         
         <div class="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto">
-            
             <div class="relative z-20 flex-1 md:flex-none">
                  <select id="dash-user-select" onchange="changeUser()" class="w-full md:w-64 appearance-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 py-3 pl-5 pr-10 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold transition cursor-pointer hover:border-blue-400">
                     <option value="all">🌏 全站统计数据</option>
@@ -98,7 +80,6 @@
                     </div>
                 </div>
             </div>
-            
         </div>
     </div>
 
@@ -196,26 +177,36 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-        <div class="lg:col-span-2 glass-card stat-card-mobile">
-            <div class="flex justify-between items-center mb-6">
+        
+        <div class="lg:col-span-2 glass-card stat-card-mobile flex flex-col">
+            <div class="flex justify-between items-center mb-4">
                 <h3 class="text-base md:text-lg font-black text-gray-800 dark:text-gray-200 tracking-wide flex items-center">
                     <span class="w-1 h-4 bg-blue-500 rounded-full mr-2.5"></span>趋势追踪
                 </h3>
-                <div class="flex bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 text-[11px] md:text-xs font-bold">
-                    <button onclick="switchTrend('day')" id="trend-btn-day" class="px-4 py-1.5 rounded-md bg-white dark:bg-gray-600 shadow-sm text-gray-900 dark:text-white transition">30天</button>
-                    <button onclick="switchTrend('week')" id="trend-btn-week" class="px-4 py-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:text-white transition">12周</button>
-                    <button onclick="switchTrend('month')" id="trend-btn-month" class="px-4 py-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:text-white transition">12月</button>
+                <div class="flex bg-gray-100 dark:bg-gray-700/50 rounded-lg p-1 text-[11px] md:text-xs font-bold border border-gray-200/50 dark:border-gray-600/50">
+                    <button onclick="switchTrend('day')" id="trend-btn-day" class="px-4 py-1.5 rounded-md bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400 transition">30天</button>
+                    <button onclick="switchTrend('week')" id="trend-btn-week" class="px-4 py-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">12周</button>
+                    <button onclick="switchTrend('month')" id="trend-btn-month" class="px-4 py-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition">12月</button>
                 </div>
             </div>
-            <div class="relative h-64 md:h-72 w-full"><canvas id="trendChart"></canvas></div>
+            <div class="relative flex-1 w-full min-h-[260px] md:min-h-[300px]"><canvas id="trendChart"></canvas></div>
         </div>
         
-        <div class="glass-card flex flex-col stat-card-mobile">
-            <h3 class="text-base md:text-lg font-black text-gray-800 dark:text-gray-200 tracking-wide mb-6 flex items-center">
-                <span class="w-1 h-4 bg-amber-500 rounded-full mr-2.5"></span>白金观影榜
-            </h3>
-            <div class="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2" id="top-users-container">
-                <p class="text-gray-400 text-sm text-center py-8 italic">加载神仙榜单...</p>
+        <div class="glass-card flex flex-col stat-card-mobile h-[380px] md:h-auto">
+            <div class="flex justify-between items-center mb-4 shrink-0">
+                <h3 class="text-base md:text-lg font-black text-gray-800 dark:text-gray-200 tracking-wide flex items-center">
+                    <span class="w-1 h-4 bg-amber-500 rounded-full mr-2.5"></span>白金观影榜
+                </h3>
+                <div class="flex bg-gray-100 dark:bg-gray-700/50 rounded-lg p-0.5 text-[10px] font-bold">
+                    <button onclick="switchTopUsers('day')" id="top-btn-day" class="px-2.5 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition">今日</button>
+                    <button onclick="switchTopUsers('week')" id="top-btn-week" class="px-2.5 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition">本周</button>
+                    <button onclick="switchTopUsers('month')" id="top-btn-month" class="px-2.5 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition">本月</button>
+                    <button onclick="switchTopUsers('all')" id="top-btn-all" class="px-2.5 py-1 rounded bg-white dark:bg-gray-600 shadow-sm text-amber-600 dark:text-amber-400 transition">总榜</button>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-1 pb-2" id="top-users-container">
+                <div class="flex justify-center items-center h-full"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>
             </div>
         </div>
     </div>
@@ -226,46 +217,38 @@
 <script>
     let trendChart = null; 
     let currentTrendDim = 'day'; 
+    let currentTopPeriod = 'all';
 
     const embyBaseUrl = "{{ emby_url }}";
     const embyServerId = "{{ server_id }}";
 
     function jumpToEmby(itemId) {
         if (!embyBaseUrl) { alert("提示: 未在设置中配置 Emby 地址。"); return; }
-        const targetUrl = `${embyBaseUrl}/web/index.html#!/item?id=${itemId}&serverId=${embyServerId}`;
-        window.open(targetUrl, '_blank');
+        window.open(`${embyBaseUrl}/web/index.html#!/item?id=${itemId}&serverId=${embyServerId}`, '_blank');
     }
-
     function jumpToLibrary(libraryId) {
-        if (!embyBaseUrl) { alert("提示: 未在设置中配置 Emby 地址。"); return; }
-        const targetUrl = `${embyBaseUrl}/web/index.html#!/videos?serverId=${embyServerId}&parentId=${libraryId}`;
-        window.open(targetUrl, '_blank');
+        if (!embyBaseUrl) return;
+        window.open(`${embyBaseUrl}/web/index.html#!/videos?serverId=${embyServerId}&parentId=${libraryId}`, '_blank');
+    }
+    function jumpToUserInsight(userId) {
+        window.location.href = `/details?uid=${userId}`;
     }
 
-    // 正在热播下拉菜单控制
-    function toggleLiveDropdown() {
+    function toggleLiveDropdown() { 
         const dropdown = document.getElementById('live-dropdown');
         if (dropdown.classList.contains('hidden')) {
             dropdown.classList.remove('hidden');
-            setTimeout(() => {
-                dropdown.classList.remove('opacity-0', 'scale-95');
-                dropdown.classList.add('opacity-100', 'scale-100');
-            }, 10);
+            setTimeout(() => { dropdown.classList.remove('opacity-0', 'scale-95'); dropdown.classList.add('opacity-100', 'scale-100'); }, 10);
         } else {
-            dropdown.classList.remove('opacity-100', 'scale-100');
-            dropdown.classList.add('opacity-0', 'scale-95');
-            setTimeout(() => {
-                dropdown.classList.add('hidden');
-            }, 200);
+            dropdown.classList.remove('opacity-100', 'scale-100'); dropdown.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => { dropdown.classList.add('hidden'); }, 200);
         }
     }
-
     document.addEventListener('click', (event) => {
         const dropdown = document.getElementById('live-dropdown');
         const btn = document.getElementById('live-btn');
         if (!dropdown.classList.contains('hidden') && !dropdown.contains(event.target) && !btn.contains(event.target)) {
-            dropdown.classList.remove('opacity-100', 'scale-100');
-            dropdown.classList.add('opacity-0', 'scale-95');
+            dropdown.classList.remove('opacity-100', 'scale-100'); dropdown.classList.add('opacity-0', 'scale-95');
             setTimeout(() => { dropdown.classList.add('hidden'); }, 200);
         }
     });
@@ -276,29 +259,18 @@
         containers.forEach(id => {
             const container = document.getElementById(id);
             if (!container || !container.children.length) return;
-            const style = window.getComputedStyle(container);
-            const cols = style.gridTemplateColumns.split(' ').length;
+            const cols = window.getComputedStyle(container).gridTemplateColumns.split(' ').length;
             const maxItems = cols * 2;
-            Array.from(container.children).forEach((child, index) => {
-                child.style.display = index < maxItems ? '' : 'none';
-            });
+            Array.from(container.children).forEach((child, index) => { child.style.display = index < maxItems ? '' : 'none'; });
         });
     }
-
-    const resizeObserver = new ResizeObserver(() => { applyTwoRowLimit(); });
-    resizeObserver.observe(document.body);
+    new ResizeObserver(() => { applyTwoRowLimit(); }).observe(document.body);
 
     document.getElementById('current-date').innerText = new Date().toLocaleDateString('zh-CN', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
 
     window.addEventListener('theme-change', () => {
         if(trendChart) {
-            const isDark = document.documentElement.classList.contains('dark');
-            const gridColor = isDark ? '#374151' : '#f3f4f6';
-            const textColor = isDark ? '#9ca3af' : '#9ca3af';
-            trendChart.options.scales.y.grid.color = gridColor;
-            trendChart.options.scales.x.ticks.color = textColor;
-            trendChart.options.scales.y.ticks.color = textColor;
-            trendChart.update();
+            initTrendChart(document.getElementById('dash-user-select').value, currentTrendDim);
         }
     });
 
@@ -308,13 +280,13 @@
         fetchLibraries();        
         fetchLatest();           
         fetchRecentActivity('all'); 
-        fetchTopUsers();
+        fetchTopUsers('all');
         initTrendChart('all', 'day'); 
         fetchLive(); 
         setInterval(fetchLive, 10000);
     }
 
-    async function fetchLive() {
+    async function fetchLive() { 
         try {
             const res = await fetch('/api/stats/live');
             const json = await res.json();
@@ -367,8 +339,8 @@
             }
         } catch(e) { console.error("Live Error:", e); }
     }
-
-    async function loadUsers() {
+    
+    async function loadUsers() { 
         try {
             const res = await fetch('/api/users');
             const json = await res.json();
@@ -381,7 +353,7 @@
                     select.appendChild(option);
                 });
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { }
     }
     
     function changeUser() {
@@ -391,7 +363,7 @@
         initTrendChart(userId, currentTrendDim); 
     }
 
-    async function fetchDashboardData(userId) {
+    async function fetchDashboardData(userId) { 
         try {
             const response = await fetch(`/api/stats/dashboard?user_id=${userId}`);
             const res = await response.json();
@@ -409,8 +381,8 @@
             }
         } catch (error) { console.error(error); }
     }
-
-    async function fetchLibraries() {
+    
+    async function fetchLibraries() { 
         const container = document.getElementById('library-container');
         try {
             const res = await fetch('/api/stats/libraries');
@@ -432,7 +404,7 @@
         } catch (e) { console.error(e); }
     }
     
-    async function fetchLatest() {
+    async function fetchLatest() { 
         const container = document.getElementById('latest-container');
         try {
             const res = await fetch('/api/stats/latest?limit=40');
@@ -460,8 +432,8 @@
             } else { container.innerHTML = `<div class="w-full md:col-span-full py-10 text-center text-sm text-gray-400 flex-shrink-0">暂无数据</div>`; }
         } catch (e) { console.error(e); }
     }
-
-    async function fetchRecentActivity(userId) {
+    
+    async function fetchRecentActivity(userId) { 
         const container = document.getElementById('recent-container');
         try {
             const res = await fetch(`/api/stats/recent?user_id=${userId}`);
@@ -490,54 +462,159 @@
             } else { container.innerHTML = `<div class="w-full md:col-span-full py-10 text-center text-sm text-gray-400 flex-shrink-0">暂无数据</div>`; }
         } catch (e) { console.error(e); }
     }
-    
-    async function fetchTopUsers() {
+
+    // 🔥 排行榜支持时间维度切换
+    function switchTopUsers(period) {
+        currentTopPeriod = period;
+        ['day', 'week', 'month', 'all'].forEach(p => {
+            const btn = document.getElementById(`top-btn-${p}`);
+            if(p === period) {
+                btn.className = "px-2.5 py-1 rounded bg-white dark:bg-gray-600 shadow-sm text-amber-600 dark:text-amber-400 transition font-bold";
+            } else {
+                btn.className = "px-2.5 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition";
+            }
+        });
+        fetchTopUsers(period);
+    }
+
+    async function fetchTopUsers(period) {
         const container = document.getElementById('top-users-container');
+        container.innerHTML = '<div class="flex justify-center items-center h-32"><i class="fa-solid fa-spinner fa-spin text-gray-300"></i></div>';
         try {
-            const res = await fetch(`/api/stats/top_users_list`);
+            const res = await fetch(`/api/stats/top_users_list?period=${period}`);
             const json = await res.json();
             if (json.status === 'success' && json.data.length > 0) {
                 let html = '';
                 json.data.forEach((user, index) => {
-                    let rankClass = "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400";
-                    if(index === 0) rankClass = "bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400";
-                    if(index === 1) rankClass = "bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300";
-                    if(index === 2) rankClass = "bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-400";
+                    let rankClass = "bg-gray-100 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400";
+                    if(index === 0) rankClass = "bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400 shadow-sm";
+                    if(index === 1) rankClass = "bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 shadow-sm";
+                    if(index === 2) rankClass = "bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-400 shadow-sm";
+                    
+                    // 🔥 加入了点击下钻穿透，并且有悬停箭头动画
                     html += `
-                    <div class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-xl transition group cursor-default border border-transparent hover:border-gray-200 dark:hover:border-gray-600">
+                    <div onclick="jumpToUserInsight('${user.UserId}')" class="user-rank-card flex items-center justify-between p-3 rounded-xl border border-transparent bg-white dark:bg-transparent">
                         <div class="flex items-center min-w-0">
-                            <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl ${rankClass} flex items-center justify-center font-black text-sm mr-4 shrink-0 shadow-sm">${index + 1}</div>
+                            <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-[10px] ${rankClass} flex items-center justify-center font-black text-sm mr-4 shrink-0">${index + 1}</div>
                             <div class="truncate">
-                                <p class="text-sm md:text-base font-black text-gray-800 dark:text-gray-200 truncate group-hover:text-amber-500 transition">${user.UserName}</p>
-                                <p class="text-[10px] md:text-xs text-gray-500 font-bold mt-0.5 uppercase tracking-wide">${user.Plays} 次播放</p>
+                                <p class="text-sm font-bold text-gray-800 dark:text-gray-200 truncate transition">${user.UserName}</p>
+                                <p class="text-[10px] md:text-xs text-gray-500 font-medium mt-0.5 uppercase tracking-wide">${user.Plays} 次播放</p>
                             </div>
                         </div>
-                        <div class="text-right pl-3"><p class="text-lg font-black text-gray-900 dark:text-gray-100 tracking-tighter">${Math.round(user.TotalTime/3600)}<span class="text-[10px] md:text-xs font-bold text-gray-400 ml-1">小时</span></p></div>
+                        <div class="flex items-center pl-3">
+                            <p class="text-base font-black text-indigo-600 dark:text-indigo-400 tracking-tight text-right w-16">${Math.round(user.TotalTime/3600)}<span class="text-[9px] font-bold opacity-60 ml-0.5">H</span></p>
+                            <i class="fa-solid fa-chevron-right text-xs text-indigo-400 user-rank-arrow ml-2"></i>
+                        </div>
                     </div>`;
                 });
                 container.innerHTML = html;
+            } else {
+                container.innerHTML = `<div class="text-center py-10 text-gray-400 text-xs">当前时段暂无数据</div>`;
             }
         } catch (e) { console.error(e); }
     }
     
+    // 趋势图维度切换
+    function switchTrend(dim) {
+        currentTrendDim = dim;
+        ['day', 'week', 'month'].forEach(d => {
+            const btn = document.getElementById(`trend-btn-${d}`);
+            if(d === dim) {
+                btn.className = "px-4 py-1.5 rounded-md bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400 transition";
+            } else {
+                btn.className = "px-4 py-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition";
+            }
+        });
+        initTrendChart(document.getElementById('dash-user-select').value, dim);
+    }
+
+    // 🔥 Vercel 风格液态渐变趋势图
     async function initTrendChart(userId, dimension = 'day') {
         const ctx = document.getElementById('trendChart').getContext('2d');
         if(trendChart) trendChart.destroy(); 
+        
         const isDark = document.documentElement.classList.contains('dark');
-        const gridColor = isDark ? '#374151' : '#f3f4f6';
-        const textColor = isDark ? '#9ca3af' : '#9ca3af';
+        const textColor = isDark ? '#6b7280' : '#9ca3af';
+
         try {
             const res = await fetch(`/api/stats/trend?user_id=${userId}&dimension=${dimension}`);
             const json = await res.json();
             const data = json.data || {};
             const labels = Object.keys(data);
             const values = Object.values(data).map(v => Math.round(v/3600)); 
-            let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.15)');
-            gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
-            trendChart = new Chart(ctx, { type: 'line', data: { labels: labels.length > 0 ? labels : ['无数据'], datasets: [{ label: '播放时长 (小时)', data: values.length > 0 ? values : [0], borderColor: '#3b82f6', backgroundColor: gradient, borderWidth: 3, pointBackgroundColor: isDark ? '#1f2937' : '#fff', pointBorderColor: '#3b82f6', pointRadius: 4, pointHoverRadius: 6, fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { borderDash: [4, 4], color: gridColor }, ticks: { font: {size: 11, weight: 'bold'}, color: textColor } }, x: { grid: { display: false }, ticks: { font: {size: 11, weight: 'bold'}, color: textColor } } } } });
+            
+            // 液态光影渐变色
+            let gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, isDark ? 'rgba(99, 102, 241, 0.5)' : 'rgba(99, 102, 241, 0.4)'); // 顶部深紫/蓝
+            gradient.addColorStop(1, isDark ? 'rgba(99, 102, 241, 0.0)' : 'rgba(99, 102, 241, 0.0)'); // 底部透明
+            
+            // 边框发光色
+            let borderColor = isDark ? '#818cf8' : '#6366f1';
+
+            trendChart = new Chart(ctx, { 
+                type: 'line', 
+                data: { 
+                    labels: labels.length > 0 ? labels : ['无数据'], 
+                    datasets: [{ 
+                        label: '播放时长 (小时)', 
+                        data: values.length > 0 ? values : [0], 
+                        borderColor: borderColor, 
+                        backgroundColor: gradient, 
+                        borderWidth: 3, 
+                        pointBackgroundColor: borderColor,
+                        pointBorderColor: isDark ? '#1f2937' : '#fff', 
+                        pointBorderWidth: 2,
+                        pointRadius: 0,           // 默认隐藏圆点
+                        pointHoverRadius: 6,      // 悬停时显示大圆点
+                        fill: true, 
+                        tension: 0.4              // 极致平滑曲线
+                    }] 
+                }, 
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                            titleColor: isDark ? '#e5e7eb' : '#374151',
+                            bodyColor: borderColor,
+                            borderColor: isDark ? '#4b5563' : '#e5e7eb',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) { return context.parsed.y + ' 小时'; }
+                            }
+                        }
+                    }, 
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            border: { display: false }, // 隐藏 Y 轴实线
+                            grid: { display: false },   // 隐藏横向网格线 (Vercel 风格精髓)
+                            ticks: { display: false }   // 甚至隐藏 Y 轴数字
+                        }, 
+                        x: { 
+                            border: { display: false }, // 隐藏 X 轴实线
+                            grid: { display: false }, 
+                            ticks: { 
+                                font: { family: 'ui-monospace, SFPro, sans-serif', size: 10, weight: '500'}, 
+                                color: textColor,
+                                maxTicksLimit: 6,       // 不要密密麻麻的日期，保持呼吸感
+                                maxRotation: 0          // 文字不倾斜
+                            } 
+                        } 
+                    } 
+                } 
+            });
         } catch(e) { console.error("Chart Load Error:", e); }
     }
+    
     init();
 </script>
 {% endblock %}
