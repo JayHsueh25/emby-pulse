@@ -1,82 +1,132 @@
 {% extends "layout.html" %}
 {% block title %}数据洞察 - EmbyPulse{% endblock %}
 {% block content %}
-<div class="max-w-7xl mx-auto w-full px-4 md:px-8 py-6 pb-20">
+<div class="max-w-7xl mx-auto w-full px-4 md:px-8 py-6 pb-24">
+    
     <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div>
             <h1 class="text-2xl font-black text-gray-900 dark:text-white">数据洞察</h1>
-            <p class="text-xs text-gray-500 mt-1">深度分析用户行为画像</p>
+            <p class="text-xs text-gray-500 mt-1">全维度用户行为与习惯画像生成</p>
         </div>
         <div class="w-full md:w-auto bg-white dark:bg-gray-800 p-1 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 relative">
              <select id="user-select" onchange="changeUser()" class="w-full md:w-56 appearance-none bg-transparent text-gray-700 dark:text-gray-200 py-2.5 pl-4 pr-10 rounded-lg text-sm font-bold focus:outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500 transition">
-                <option value="all">🌏 全服数据</option>
+                <option value="all">🌏 全服综合数据</option>
             </select>
             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500"><i class="fa-solid fa-chevron-down text-sm"></i></div>
         </div>
     </div>
 
-    <div id="loading" class="text-center py-20 text-gray-400">
-        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-indigo-500 mb-3"></i>
-        <p class="text-sm font-bold tracking-widest animate-pulse">正在生成用户画像雷达...</p>
+    <div id="loading" class="text-center py-32 text-gray-400">
+        <i class="fa-solid fa-circle-notch fa-spin text-4xl text-indigo-500 mb-4"></i>
+        <p class="text-sm font-bold tracking-widest animate-pulse">正在扫描时间切片与用户指纹...</p>
     </div>
 
-    <div id="content-area" class="hidden animate-fade-in space-y-6">
+    <div id="content-area" class="hidden animate-fade-in grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-6">
         
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col justify-center min-h-[220px]">
-                <h3 class="font-bold text-gray-800 dark:text-gray-200 mb-4 text-sm flex items-center tracking-wide">
-                    <i class="fa-solid fa-medal text-yellow-500 mr-2 text-lg"></i> 观影成就
-                </h3>
-                <div id="badges-container" class="flex flex-wrap gap-2"></div>
-            </div>
+        <div class="md:col-span-12 bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 rounded-[2rem] p-6 md:p-8 shadow-xl relative overflow-hidden text-white flex flex-col md:flex-row items-center justify-between gap-6 border border-white/10">
+            <div class="absolute -right-10 -bottom-10 opacity-10 pointer-events-none transform rotate-12"><i class="fa-solid fa-fingerprint text-[180px]"></i></div>
             
-            <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="font-bold text-gray-800 dark:text-gray-200 text-sm flex items-center tracking-wide">
-                        <i class="fa-solid fa-chart-line text-blue-500 mr-2 text-lg"></i> 观影频率统计
-                    </h3>
-                    <div class="flex bg-gray-50 dark:bg-gray-900 rounded-lg p-1 text-[11px] border border-gray-100 dark:border-gray-700">
-                        <button onclick="switchChart('day')" class="chart-btn px-3 py-1.5 rounded transition text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-bold" id="btn-day">月内</button>
-                        <button onclick="switchChart('month')" class="chart-btn px-3 py-1.5 rounded bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400 font-bold transition" id="btn-month">年内</button>
+            <div class="flex items-center gap-5 z-10 w-full md:w-auto">
+                <div class="w-16 h-16 md:w-20 md:h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border-2 border-white/40 text-2xl md:text-3xl font-black shadow-inner">
+                    <span id="hero-avatar">U</span>
+                </div>
+                <div>
+                    <h2 class="text-2xl md:text-3xl font-black drop-shadow-md" id="hero-name">User Name</h2>
+                    <div class="mt-2 flex items-center gap-2 text-xs font-medium text-white/90 bg-black/20 w-fit px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/10 shadow-sm">
+                        <i class="fa-solid fa-calendar-check text-yellow-300"></i> 陪伴 Emby 的第 <span id="hero-days" class="text-yellow-300 font-bold px-0.5 text-sm">1</span> 天
                     </div>
                 </div>
-                <div class="relative h-48 w-full">
-                    <canvas id="trendChart"></canvas>
+            </div>
+            
+            <div class="flex gap-4 md:gap-10 z-10 w-full md:w-auto justify-between md:justify-end bg-black/10 p-4 md:p-0 rounded-2xl md:bg-transparent">
+                <div class="text-center">
+                    <p class="text-[10px] md:text-xs text-white/70 uppercase tracking-widest font-bold mb-1">累计播放</p>
+                    <p class="text-2xl md:text-4xl font-black drop-shadow-sm"><span id="hero-plays">0</span> <span class="text-sm font-normal opacity-60">次</span></p>
+                </div>
+                <div class="w-px bg-white/20 hidden md:block"></div>
+                <div class="text-center">
+                    <p class="text-[10px] md:text-xs text-white/70 uppercase tracking-widest font-bold mb-1">总计沉浸</p>
+                    <p class="text-2xl md:text-4xl font-black drop-shadow-sm"><span id="hero-hours">0</span> <span class="text-sm font-normal opacity-60">H</span></p>
+                </div>
+                <div class="w-px bg-white/20 hidden sm:block"></div>
+                <div class="text-center hidden sm:block">
+                    <p class="text-[10px] md:text-xs text-white/70 uppercase tracking-widest font-bold mb-1">单次平均</p>
+                    <p class="text-2xl md:text-4xl font-black drop-shadow-sm"><span id="hero-avg">0</span> <span class="text-sm font-normal opacity-60">m</span></p>
                 </div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <h3 class="font-bold text-gray-800 dark:text-gray-200 text-sm mb-4 flex items-center tracking-wide"><i class="fa-regular fa-clock text-indigo-500 mr-2 text-lg"></i> 活跃时间段雷达</h3>
-                <div class="relative h-64 w-full"><canvas id="hourChart"></canvas></div>
-            </div>
-            
-            <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                <h3 class="font-bold text-gray-800 dark:text-gray-200 text-sm mb-4 flex items-center tracking-wide"><i class="fa-solid fa-desktop text-purple-500 mr-2 text-lg"></i> 常用播放设备终端</h3>
-                <div class="relative h-64 w-full"><canvas id="deviceChart"></canvas></div>
-            </div>
+        <div class="md:col-span-8 bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col justify-center">
+            <h3 class="font-black text-gray-800 dark:text-gray-200 mb-5 text-sm flex items-center tracking-wider uppercase">
+                <i class="fa-solid fa-award text-yellow-500 mr-2 text-lg"></i> 观影成就大厅
+            </h3>
+            <div id="badges-container" class="flex flex-wrap gap-2.5"></div>
+        </div>
+        
+        <div class="md:col-span-4 bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+            <h3 class="font-black text-gray-800 dark:text-gray-200 mb-4 text-sm flex items-center tracking-wider uppercase relative z-10">
+                <i class="fa-solid fa-heart text-rose-500 mr-2 text-lg"></i> 执念与最爱
+            </h3>
+            <div id="top-fav-container" class="relative z-10 flex gap-4 items-center h-full pb-4">
+                </div>
+            <div id="top-fav-bg" class="absolute inset-0 bg-cover bg-center opacity-[0.04] dark:opacity-10 filter blur-xl transition-transform duration-700 group-hover:scale-110 pointer-events-none"></div>
         </div>
 
-        <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80">
-                <h3 class="font-bold text-gray-800 dark:text-gray-200 text-sm flex items-center tracking-wide">
-                    <i class="fa-solid fa-list-check text-green-500 mr-2 text-lg"></i> 100 条最新播放流水
+        <div class="md:col-span-8 bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div class="flex justify-between items-end mb-4">
+                <h3 class="font-black text-gray-800 dark:text-gray-200 text-sm flex items-center tracking-wider uppercase"><i class="fa-solid fa-clock-rotate-left text-indigo-500 mr-2 text-lg"></i> 24H 观影生物钟</h3>
+                <span id="biorhythm-word" class="text-[10px] md:text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 rounded-md border border-indigo-100 dark:border-indigo-800/50 shadow-sm">分析中...</span>
+            </div>
+            <div class="relative h-48 w-full mt-2"><canvas id="hourChart"></canvas></div>
+        </div>
+
+        <div class="md:col-span-4 bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col justify-center">
+            <h3 class="font-black text-gray-800 dark:text-gray-200 text-sm mb-6 flex items-center tracking-wider uppercase"><i class="fa-solid fa-scale-balanced text-teal-500 mr-2 text-lg"></i> 偏好天平</h3>
+            <div class="flex justify-between text-xs font-black text-gray-500 mb-2">
+                <span class="text-blue-500"><i class="fa-solid fa-film mr-1 opacity-70"></i>电影 <span id="pref-movie-pct">0%</span></span>
+                <span class="text-purple-500"><span id="pref-ep-pct">0%</span> 剧集<i class="fa-solid fa-tv ml-1 opacity-70"></i></span>
+            </div>
+            <div class="h-4 md:h-5 rounded-full flex overflow-hidden bg-gray-100 dark:bg-gray-700 w-full shadow-inner border border-gray-200 dark:border-gray-600/50">
+                <div id="pref-movie-bar" class="bg-gradient-to-r from-blue-400 to-blue-600 h-full transition-all duration-1000 ease-out" style="width: 50%;"></div>
+                <div id="pref-ep-bar" class="bg-gradient-to-r from-purple-400 to-purple-600 h-full transition-all duration-1000 ease-out" style="width: 50%;"></div>
+            </div>
+            <div class="mt-5 text-center text-xs text-gray-500 font-bold bg-gray-50 dark:bg-gray-700/30 py-2 rounded-lg border border-gray-100 dark:border-gray-700" id="pref-desc">探索中...</div>
+        </div>
+
+        <div class="md:col-span-8 bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-black text-gray-800 dark:text-gray-200 text-sm flex items-center tracking-wider uppercase"><i class="fa-solid fa-chart-line text-blue-500 mr-2 text-lg"></i> 观影频率统计</h3>
+                <div class="flex bg-gray-50 dark:bg-gray-900 rounded-lg p-0.5 text-[11px] border border-gray-100 dark:border-gray-700 shadow-inner">
+                    <button onclick="switchChart('day')" class="chart-btn px-3 py-1.5 rounded transition text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-bold" id="btn-day">最近30天</button>
+                    <button onclick="switchChart('month')" class="chart-btn px-3 py-1.5 rounded bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400 font-bold transition" id="btn-month">过去1年</button>
+                </div>
+            </div>
+            <div class="relative h-48 w-full"><canvas id="trendChart"></canvas></div>
+        </div>
+
+        <div class="md:col-span-4 bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col">
+            <h3 class="font-black text-gray-800 dark:text-gray-200 text-sm mb-4 flex items-center tracking-wider uppercase shrink-0"><i class="fa-solid fa-desktop text-emerald-500 mr-2 text-lg"></i> 常用终端分布</h3>
+            <div class="relative flex-1 w-full min-h-[160px]"><canvas id="deviceChart"></canvas></div>
+        </div>
+
+        <div class="md:col-span-12 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden mt-2">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/80 dark:bg-gray-800/80">
+                <h3 class="font-black text-gray-800 dark:text-gray-200 text-sm flex items-center tracking-wider uppercase">
+                    <i class="fa-solid fa-list-check text-gray-400 mr-2 text-lg"></i> 最近 100 条流水账
                 </h3>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm text-left">
-                    <thead class="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-700/50 dark:text-gray-400">
+                    <thead class="text-[10px] text-gray-400 uppercase bg-white dark:bg-gray-800 tracking-wider">
                         <tr>
-                            <th class="px-6 py-3">时间</th>
-                            <th class="px-6 py-3">用户</th>
-                            <th class="px-6 py-3">媒体名称</th>
-                            <th class="px-6 py-3">终端设备</th>
-                            <th class="px-6 py-3 text-right">时长</th>
+                            <th class="px-6 py-3 font-bold">时间</th>
+                            <th class="px-6 py-3 font-bold">用户</th>
+                            <th class="px-6 py-3 font-bold">媒体名称</th>
+                            <th class="px-6 py-3 font-bold">终端设备</th>
+                            <th class="px-6 py-3 text-right font-bold">时长</th>
                         </tr>
                     </thead>
-                    <tbody id="logs-table-body" class="divide-y divide-gray-100 dark:divide-gray-700/50 text-gray-600 dark:text-gray-300">
-                    </tbody>
+                    <tbody id="logs-table-body" class="divide-y divide-gray-50 dark:divide-gray-700/50 text-gray-600 dark:text-gray-300"></tbody>
                 </table>
             </div>
         </div>
@@ -88,27 +138,19 @@
     let charts = { trend: null, hour: null, device: null };
     let currentChartDim = 'month';
 
-    // 🔥 解析 URL 中的 uid 参数，用于接收从首页传过来的指令
     function getUrlParams() {
-        const params = new URLSearchParams(window.location.search);
-        return params.get('uid');
+        return new URLSearchParams(window.location.search).get('uid');
     }
 
     async function init() {
         await loadUsers();
-        
-        // 自动聚焦传过来的用户
         const targetUid = getUrlParams();
         if (targetUid) {
             const select = document.getElementById('user-select');
             for(let i=0; i<select.options.length; i++) {
-                if(select.options[i].value === targetUid) {
-                    select.selectedIndex = i;
-                    break;
-                }
+                if(select.options[i].value === targetUid) { select.selectedIndex = i; break; }
             }
         }
-        
         changeUser();
     }
 
@@ -125,76 +167,63 @@
                     select.appendChild(option);
                 });
             }
-        } catch (e) { console.error(e); }
+        } catch (e) {}
     }
 
     async function changeUser() {
         const userId = document.getElementById('user-select').value;
+        const selectText = document.getElementById('user-select').options[document.getElementById('user-select').selectedIndex].text;
         const loading = document.getElementById('loading');
         const content = document.getElementById('content-area');
         
-        loading.classList.remove('hidden');
-        content.classList.add('hidden');
+        loading.classList.remove('hidden'); content.classList.add('hidden');
 
         try {
+            // Update Hero Card UI before fetching to feel responsive
+            document.getElementById('hero-name').innerText = userId === 'all' ? '全服综合大盘' : selectText.replace('👤 ', '');
+            document.getElementById('hero-avatar').innerText = userId === 'all' ? 'E' : selectText.replace('👤 ', '').charAt(0).toUpperCase();
+
             await fetchUserDetails(userId);
             await fetchBadges(userId);
             await initTrendChart(userId, currentChartDim);
             
-            loading.classList.add('hidden');
-            content.classList.remove('hidden');
-        } catch (e) { console.error(e); }
+            loading.classList.add('hidden'); content.classList.remove('hidden');
+        } catch (e) {}
     }
 
     function switchChart(dim) {
         currentChartDim = dim;
         ['day', 'month'].forEach(d => {
             const btn = document.getElementById(`btn-${d}`);
-            if(d === dim) {
-                btn.className = "chart-btn px-3 py-1.5 rounded bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400 font-bold transition";
-            } else {
-                btn.className = "chart-btn px-3 py-1.5 rounded transition text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-bold";
-            }
+            if(d === dim) { btn.className = "chart-btn px-3 py-1.5 rounded bg-white dark:bg-gray-700 shadow-sm text-blue-600 dark:text-blue-400 font-bold transition"; } 
+            else { btn.className = "chart-btn px-3 py-1.5 rounded transition text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-bold"; }
         });
-        const userId = document.getElementById('user-select').value;
-        initTrendChart(userId, dim);
+        initTrendChart(document.getElementById('user-select').value, dim);
     }
 
+    // 🔥 渲染极简柱状趋势图
     async function initTrendChart(userId, dimension = 'month') {
         const ctx = document.getElementById('trendChart').getContext('2d');
         if(charts.trend) charts.trend.destroy();
         
         const isDark = document.documentElement.classList.contains('dark');
         const gridColor = isDark ? '#374151' : '#f3f4f6';
+        const textColor = isDark ? '#9ca3af' : '#9ca3af';
         
         try {
             const endpoint = dimension === 'month' ? '/api/stats/monthly_stats' : '/api/stats/trend?dimension=day';
-            const url = `${endpoint}${endpoint.includes('?')?'&':'?'}user_id=${userId}`;
-            const res = await fetch(url);
+            const res = await fetch(`${endpoint}${endpoint.includes('?')?'&':'?'}user_id=${userId}`);
             const json = await res.json();
             const data = json.data || {};
             const labels = Object.keys(data);
             const values = Object.values(data).map(v => Math.round(v/3600));
 
-            // Vercel 极简柱状图风格
             charts.trend = new Chart(ctx, {
                 type: 'bar',
-                data: { 
-                    labels: labels.length > 0 ? labels : ['无'], 
-                    datasets: [{ 
-                        data: values.length > 0 ? values : [0], 
-                        backgroundColor: isDark ? '#6366f1' : '#4f46e5', 
-                        borderRadius: 4,
-                        barPercentage: 0.6
-                    }] 
-                },
+                data: { labels: labels.length ? labels : ['无'], datasets: [{ data: values.length ? values : [0], backgroundColor: isDark ? '#60a5fa' : '#3b82f6', borderRadius: 4, barPercentage: 0.6 }] },
                 options: { 
-                    responsive: true, maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } },
-                    scales: { 
-                        y: { beginAtZero: true, grid: { color: gridColor }, border:{display:false} }, 
-                        x: { grid: { display: false }, ticks: { font: {family: 'monospace'}, maxRotation: 0 } } 
-                    } 
+                    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + ' 小时' } } },
+                    scales: { y: { beginAtZero: true, grid: { color: gridColor }, border:{display:false}, ticks:{color: textColor, font:{size:10}} }, x: { grid: { display: false }, ticks: { color: textColor, font: {family: 'monospace'}, maxRotation: 0 } } } 
                 }
             });
         } catch(e) {}
@@ -208,11 +237,11 @@
             if (json.status === 'success' && json.data.length > 0) {
                 let html = '';
                 json.data.forEach(b => {
-                    html += `<div class="${b.bg} ${b.color} dark:bg-opacity-20 px-3 py-1.5 rounded-lg flex items-center text-sm font-bold shadow-sm cursor-help transition hover:-translate-y-0.5" title="${b.desc}"><i class="fa-solid ${b.icon} mr-2"></i>${b.name}</div>`;
+                    html += `<div class="${b.bg} ${b.color} dark:bg-opacity-20 px-3.5 py-2 rounded-xl flex items-center text-xs font-black shadow-sm cursor-help transition-all hover:scale-105 hover:shadow-md border border-transparent hover:border-current" title="${b.desc}"><i class="fa-solid ${b.icon} mr-2 text-sm opacity-80"></i>${b.name}</div>`;
                 });
                 container.innerHTML = html;
             } else {
-                container.innerHTML = '<span class="text-gray-400 text-sm italic">数据积攒中，暂无特殊成就</span>';
+                container.innerHTML = '<span class="text-gray-400 text-sm font-medium py-4"><i class="fa-solid fa-ghost mr-2 opacity-50"></i>数据不足，尚无特殊成就</span>';
             }
         } catch(e){}
     }
@@ -222,59 +251,122 @@
             const res = await fetch(`/api/stats/user_details?user_id=${userId}`);
             const json = await res.json();
             if (json.status === 'success') {
-                renderHourChart(json.data.hourly);
-                renderDeviceChart(json.data.devices);
-                renderLogs(json.data.logs);
+                const d = json.data;
+                
+                // 1. 更新顶部名片
+                document.getElementById('hero-plays').innerText = d.overview.total_plays;
+                document.getElementById('hero-hours').innerText = Math.round(d.overview.total_duration / 3600);
+                document.getElementById('hero-avg').innerText = Math.round(d.overview.avg_duration / 60);
+                document.getElementById('hero-days').innerText = d.overview.account_age_days;
+
+                // 2. 渲染 24H 生物钟
+                renderHourChart(d.hourly);
+                
+                // 3. 渲染设备图
+                renderDeviceChart(d.devices);
+                
+                // 4. 渲染偏好天平
+                renderPreference(d.preference);
+
+                // 5. 渲染最爱
+                renderTopFav(d.top_fav);
+
+                // 6. 渲染日志
+                renderLogs(d.logs);
             }
         } catch(e){}
     }
 
+    // 🔥 抛弃雷达图，使用精美的 24小时柱状生物钟
     function renderHourChart(dataObj) {
         const ctx = document.getElementById('hourChart').getContext('2d');
         if(charts.hour) charts.hour.destroy();
         
         let labels = [], values = [];
+        let maxVal = -1, maxHour = 0;
+
         for(let i=0; i<24; i++) {
             let h = String(i).padStart(2, '0');
-            labels.push(h+':00');
-            values.push(dataObj[h] || 0);
+            labels.push(h);
+            let val = dataObj[h] || 0;
+            values.push(val);
+            if(val > maxVal) { maxVal = val; maxHour = i; }
         }
+
+        // 计算热词
+        let word = "尚无数据分析";
+        if (maxVal > 0) {
+            if (maxHour >= 6 && maxHour < 12) word = `🌅 早间活跃型 (峰值 ${maxHour}:00)`;
+            else if (maxHour >= 12 && maxHour < 18) word = `🐟 午后摸鱼选手 (峰值 ${maxHour}:00)`;
+            else if (maxHour >= 18 && maxHour < 24) word = `📺 黄金档追剧 (峰值 ${maxHour}:00)`;
+            else word = `🦉 深夜修仙党 (峰值 ${maxHour}:00)`;
+        }
+        document.getElementById('biorhythm-word').innerText = word;
         
         const isDark = document.documentElement.classList.contains('dark');
-        const gridColor = isDark ? '#374151' : '#e5e7eb';
+        const textColor = isDark ? '#6b7280' : '#9ca3af';
 
         charts.hour = new Chart(ctx, {
-            type: 'radar',
-            data: { 
-                labels: labels, 
-                datasets: [{ 
-                    data: values, 
-                    backgroundColor: isDark ? 'rgba(99, 102, 241, 0.4)' : 'rgba(99, 102, 241, 0.2)', 
-                    borderColor: '#6366f1', 
-                    borderWidth: 2,
-                    pointBackgroundColor: '#6366f1',
-                    pointRadius: 2
-                }] 
-            },
+            type: 'bar',
+            data: { labels: labels, datasets: [{ data: values, backgroundColor: isDark ? '#818cf8' : '#6366f1', borderRadius: 4, hoverBackgroundColor: '#f59e0b' }] },
             options: { 
-                responsive: true, maintainAspectRatio: false, 
+                responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip:{callbacks:{label: c => c.parsed.y + ' 次'}} },
                 scales: { 
-                    r: { 
-                        angleLines: { color: gridColor }, 
-                        grid: { color: gridColor }, 
-                        pointLabels: { font: {size: 10, family: 'monospace'}, color: isDark ? '#9ca3af' : '#6b7280' }, 
-                        ticks: { display: false } 
-                    } 
-                }, 
-                plugins: { legend: { display: false } } 
+                    y: { display: false }, 
+                    x: { grid: { display: false }, ticks: { color: textColor, font: {family: 'monospace', size: 9}, maxRotation: 0, maxTicksLimit: 12 } } 
+                }
             }
         });
+    }
+
+    // 渲染偏好天平
+    function renderPreference(pref) {
+        const total = pref.movie_plays + pref.episode_plays;
+        let mPct = 0, ePct = 0;
+        let desc = "尚无观看记录";
+        
+        if (total > 0) {
+            mPct = Math.round((pref.movie_plays / total) * 100);
+            ePct = 100 - mPct;
+            if (mPct > 70) desc = "「沉浸式长片爱好者，偏爱两小时的光影」";
+            else if (ePct > 70) desc = "「剧情连贯控，追剧是最大的乐趣」";
+            else desc = "「雨露均沾，电影剧集我全都要」";
+        }
+        
+        document.getElementById('pref-movie-pct').innerText = `${mPct}%`;
+        document.getElementById('pref-ep-pct').innerText = `${ePct}%`;
+        document.getElementById('pref-movie-bar').style.width = `${mPct}%`;
+        document.getElementById('pref-ep-bar').style.width = `${ePct}%`;
+        document.getElementById('pref-desc').innerText = desc;
+    }
+
+    // 渲染最爱
+    function renderTopFav(fav) {
+        const container = document.getElementById('top-fav-container');
+        const bg = document.getElementById('top-fav-bg');
+        if (fav && fav.ItemId) {
+            const imgUrl = `/api/proxy/smart_image?item_id=${fav.ItemId}&name=${encodeURIComponent(fav.ItemName)}&type=Primary`;
+            const cleanName = fav.ItemName.split(' - ')[0];
+            container.innerHTML = `
+                <img src="${imgUrl}" class="w-14 h-20 md:w-16 md:h-24 rounded-lg shadow-md object-cover bg-gray-100 dark:bg-gray-800 shrink-0 border border-gray-200/50 dark:border-gray-700">
+                <div class="flex-1 min-w-0 flex flex-col justify-center">
+                    <h4 class="font-black text-gray-900 dark:text-white text-sm md:text-base line-clamp-2 leading-tight group-hover:text-rose-500 transition-colors drop-shadow-sm">${cleanName}</h4>
+                    <div class="mt-2 text-[10px] md:text-xs text-gray-500 font-mono font-bold space-y-1">
+                        <p class="flex items-center"><i class="fa-solid fa-repeat mr-1.5 opacity-60"></i>播放 ${fav.c} 次</p>
+                        <p class="flex items-center text-indigo-500"><i class="fa-regular fa-clock mr-1.5 opacity-60"></i>投入 ${Math.round(fav.d/60)} 分钟</p>
+                    </div>
+                </div>
+            `;
+            bg.style.backgroundImage = `url('${imgUrl}')`;
+        } else {
+            container.innerHTML = `<p class="text-gray-400 text-xs font-bold w-full text-center py-8"><i class="fa-solid fa-ghost mr-2 opacity-50"></i>暂无执念记录</p>`;
+            bg.style.backgroundImage = 'none';
+        }
     }
 
     function renderDeviceChart(dataList) {
         const ctx = document.getElementById('deviceChart').getContext('2d');
         if(charts.device) charts.device.destroy();
-        
         if(!dataList || dataList.length === 0) return;
 
         let labels = [], values = [], others = 0;
@@ -282,34 +374,18 @@
         if(others > 0) { labels.push('其他'); values.push(others); }
         
         const isDark = document.documentElement.classList.contains('dark');
-        const borderColor = isDark ? '#1f2937' : '#fff';
 
         charts.device = new Chart(ctx, {
             type: 'doughnut',
-            data: { 
-                labels: labels, 
-                datasets: [{ 
-                    data: values, 
-                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#cbd5e1'], 
-                    borderWidth: 3, 
-                    borderColor: borderColor,
-                    hoverOffset: 4
-                }] 
-            },
-            options: { 
-                responsive: true, maintainAspectRatio: false, 
-                cutout: '70%',
-                plugins: { 
-                    legend: { position: 'right', labels: {boxWidth: 12, usePointStyle: true, font:{weight: 'bold'}, color: isDark ? '#d1d5db' : '#374151'} } 
-                } 
-            }
+            data: { labels: labels, datasets: [{ data: values, backgroundColor: ['#10b981', '#6366f1', '#f59e0b', '#ec4899', '#8b5cf6', '#cbd5e1'], borderWidth: 0, hoverOffset: 5 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'right', labels: {boxWidth: 8, usePointStyle: true, font:{size: 10, weight:'bold'}, color: isDark ? '#9ca3af' : '#6b7280'} } } }
         });
     }
 
     function renderLogs(logs) {
         const tbody = document.getElementById('logs-table-body');
         if (!logs || logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-gray-400">暂无播放记录 ☕</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-gray-400 font-bold"><i class="fa-solid fa-ghost mr-2"></i>暂无播放记录</td></tr>';
             return;
         }
 
@@ -327,14 +403,14 @@
             
             html += `<tr class="bg-white dark:bg-gray-800 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
                 <td class="px-6 py-3.5 font-mono text-[11px] text-gray-500 whitespace-nowrap">${date}</td>
-                <td class="px-6 py-3.5 font-bold text-gray-700 dark:text-gray-300">${log.UserName}</td>
-                <td class="px-6 py-3.5 font-bold text-gray-900 dark:text-gray-100 max-w-[200px] truncate" title="${log.ItemName}">${log.ItemName}</td>
-                <td class="px-6 py-3.5 text-[11px]">
-                    <span class="bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 px-2 py-1 rounded font-mono border border-gray-200/50 dark:border-gray-600/50 flex items-center w-fit gap-1.5">
-                        <i class="fa-solid ${deviceIcon}"></i> <span class="truncate max-w-[100px]">${log.Device}</span>
+                <td class="px-6 py-3.5 font-black text-gray-700 dark:text-gray-300 text-xs">${log.UserName}</td>
+                <td class="px-6 py-3.5 font-bold text-gray-900 dark:text-gray-100 max-w-[200px] truncate text-xs" title="${log.ItemName}">${log.ItemName}</td>
+                <td class="px-6 py-3.5 text-[10px]">
+                    <span class="bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 px-2 py-1 rounded font-mono border border-gray-200/50 dark:border-gray-600/50 flex items-center w-fit gap-1.5 font-bold shadow-sm">
+                        <i class="fa-solid ${deviceIcon}"></i> <span class="truncate max-w-[80px]">${log.Device}</span>
                     </span>
                 </td>
-                <td class="px-6 py-3.5 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">${Math.round(log.PlayDuration/60)}m</td>
+                <td class="px-6 py-3.5 text-right font-mono font-black text-indigo-600 dark:text-indigo-400">${Math.round(log.PlayDuration/60)}m</td>
             </tr>`;
         });
         tbody.innerHTML = html;

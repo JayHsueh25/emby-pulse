@@ -227,13 +227,17 @@ def api_top_movies(user_id: Optional[str] = None, category: str = 'all', sort_by
 def api_user_details(user_id: Optional[str] = None):
     try:
         where, params = get_base_filter(user_id)
+        
+        # 1. 小时分布图
         h_res = query_db(f"SELECT strftime('%H', DateCreated) as Hour, COUNT(*) as Plays FROM PlaybackActivity {where} GROUP BY Hour", params)
         h_data = {str(i).zfill(2): 0 for i in range(24)}
         if h_res:
             for r in h_res: h_data[r['Hour']] = r['Plays']
             
+        # 2. 设备终端
         d_res = query_db(f"SELECT COALESCE(DeviceName, ClientName, 'Unknown') as Device, COUNT(*) as Plays FROM PlaybackActivity {where} GROUP BY Device ORDER BY Plays DESC LIMIT 10", params)
         
+        # 3. 播放流水账
         l_res = query_db(f"SELECT DateCreated, ItemName, PlayDuration, COALESCE(DeviceName, ClientName) as Device, UserId FROM PlaybackActivity {where} ORDER BY DateCreated DESC LIMIT 100", params)
         u_map = get_user_map_local()
         logs = []
@@ -242,8 +246,49 @@ def api_user_details(user_id: Optional[str] = None):
                 l = dict(r)
                 l['UserName'] = u_map.get(l['UserId'], "User")
                 logs.append(l)
+
+        # 🔥 4. 新增：用户画像大盘数据 (概览、偏好、最爱)
+        overview = {"total_plays": 0, "total_duration": 0, "avg_duration": 0, "account_age_days": 1}
+        pref = {"movie_plays": 0, "episode_plays": 0}
+        top_fav = None
+
+        # 统计总览与入坑时间
+        ov_res = query_db(f"SELECT COUNT(*) as Plays, SUM(PlayDuration) as Dur, MIN(DateCreated) as FirstDate FROM PlaybackActivity {where}", params)
+        if ov_res and ov_res[0]['Plays'] and ov_res[0]['Plays'] > 0:
+            overview['total_plays'] = ov_res[0]['Plays']
+            overview['total_duration'] = ov_res[0]['Dur'] or 0
+            overview['avg_duration'] = round(overview['total_duration'] / overview['total_plays'])
+            
+            first_date = ov_res[0]['FirstDate']
+            if first_date:
+                import datetime
+                try:
+                    # 兼容 ISO 格式的时间解析
+                    fd = datetime.datetime.fromisoformat(first_date.split('.')[0].replace('Z',''))
+                    days = (datetime.datetime.now() - fd).days
+                    overview['account_age_days'] = max(1, days)
+                except: pass
+        
+        # 统计影视偏好
+        try:
+            m_res = query_db(f"SELECT ItemType, COUNT(*) as c FROM PlaybackActivity {where} GROUP BY ItemType", params)
+            if m_res:
+                for m in m_res:
+                    if m['ItemType'] == 'Movie': pref['movie_plays'] = m['c']
+                    elif m['ItemType'] == 'Episode': pref['episode_plays'] = m['c']
+        except: pass
+
+        # 提取最爱影片 (单部片播放时长和次数最高)
+        try:
+            top_res = query_db(f"SELECT ItemName, ItemId, COUNT(*) as c, SUM(PlayDuration) as d FROM PlaybackActivity {where} GROUP BY ItemId ORDER BY d DESC, c DESC LIMIT 1", params)
+            if top_res:
+                top_fav = dict(top_res[0])
+        except: pass
                 
-        return {"status": "success", "data": {"hourly": h_data, "devices": [dict(r) for r in d_res] if d_res else [], "logs": logs}}
+        return {"status": "success", "data": {
+            "hourly": h_data, "devices": [dict(r) for r in d_res] if d_res else [], "logs": logs,
+            "overview": overview, "preference": pref, "top_fav": top_fav
+        }}
     except Exception as e: 
         return {"status": "error", "data": {"hourly": {}, "devices": [], "logs": []}}
 
@@ -309,13 +354,52 @@ def api_top_users_list():
 @router.get("/api/stats/badges")
 def api_badges(user_id: Optional[str] = None):
     try:
-        where, params = get_base_filter(user_id); badges = []
+        where, params = get_base_filter(user_id)
+        badges = []
+        
+        # 1. 深夜修仙 (02:00 - 05:00)
         night_res = query_db(f"SELECT COUNT(*) as c FROM PlaybackActivity {where} AND strftime('%H', DateCreated) BETWEEN '02' AND '05'", params)
-        if night_res and night_res[0]['c'] > 5: badges.append({"id": "night", "name": "修仙党", "icon": "fa-moon", "color": "text-purple-500", "bg": "bg-purple-100", "desc": "深夜是灵魂最自由的时刻"})
+        if night_res and night_res[0]['c'] > 5: badges.append({"id": "night", "name": "深夜修仙", "icon": "fa-moon", "color": "text-indigo-500", "bg": "bg-indigo-100", "desc": "深夜是灵魂最自由的时刻"})
+        
+        # 2. 周末狂欢 (周六周日)
         weekend_res = query_db(f"SELECT COUNT(*) as c FROM PlaybackActivity {where} AND strftime('%w', DateCreated) IN ('0', '6')", params)
         if weekend_res and weekend_res[0]['c'] > 10: badges.append({"id": "weekend", "name": "周末狂欢", "icon": "fa-champagne-glasses", "color": "text-pink-500", "bg": "bg-pink-100", "desc": "工作日唯唯诺诺，周末重拳出击"})
+        
+        # 3. 肝帝 (时长极大)
         dur_res = query_db(f"SELECT SUM(PlayDuration) as d FROM PlaybackActivity {where}", params)
-        if dur_res and dur_res[0]['d'] and dur_res[0]['d'] > 360000: badges.append({"id": "liver", "name": "Emby肝帝", "icon": "fa-fire", "color": "text-red-500", "bg": "bg-red-100", "desc": "阅片无数"})
+        if dur_res and dur_res[0]['d'] and dur_res[0]['d'] > 360000: badges.append({"id": "liver", "name": "Emby肝帝", "icon": "fa-fire", "color": "text-red-500", "bg": "bg-red-100", "desc": "阅片无数，肝度爆表"})
+
+        # 4. 摸鱼大师 (周一至周五 09:00-17:00)
+        fish_res = query_db(f"SELECT COUNT(*) as c FROM PlaybackActivity {where} AND strftime('%w', DateCreated) BETWEEN '1' AND '5' AND strftime('%H', DateCreated) BETWEEN '09' AND '16'", params)
+        if fish_res and fish_res[0]['c'] > 10: badges.append({"id": "fish", "name": "带薪观影", "icon": "fa-fish", "color": "text-cyan-500", "bg": "bg-cyan-100", "desc": "工作是老板的，快乐是自己的"})
+
+        # 5. 晨练党 (05:00 - 08:00)
+        morning_res = query_db(f"SELECT COUNT(*) as c FROM PlaybackActivity {where} AND strftime('%H', DateCreated) BETWEEN '05' AND '08'", params)
+        if morning_res and morning_res[0]['c'] > 5: badges.append({"id": "morning", "name": "晨练追剧", "icon": "fa-sun", "color": "text-amber-500", "bg": "bg-amber-100", "desc": "比你优秀的人，连看片都比你早"})
+
+        # 6. 设备收集控 (终端数 >= 4)
+        device_res = query_db(f"SELECT COUNT(DISTINCT COALESCE(DeviceName, ClientName)) as c FROM PlaybackActivity {where}", params)
+        if device_res and device_res[0]['c'] >= 4: badges.append({"id": "device", "name": "全平台制霸", "icon": "fa-gamepad", "color": "text-emerald-500", "bg": "bg-emerald-100", "desc": "手机、平板、电视，哪里都能看"})
+
+        # 7. 专一狂魔 (同一部播放 >= 5)
+        loyal_res = query_db(f"SELECT ItemName, COUNT(*) as c FROM PlaybackActivity {where} GROUP BY ItemId ORDER BY c DESC LIMIT 1", params)
+        if loyal_res and loyal_res[0]['c'] >= 5: 
+            badges.append({"id": "loyal", "name": "N刷狂魔", "icon": "fa-repeat", "color": "text-teal-500", "bg": "bg-teal-100", "desc": f"对《{loyal_res[0]['ItemName'].split(' - ')[0][:10]}》爱得深沉"})
+
+        # 8. 影视鉴赏家 vs 追剧狂魔
+        try:
+            m_res = query_db(f"SELECT ItemType, COUNT(*) as c FROM PlaybackActivity {where} GROUP BY ItemType", params)
+            movies, eps = 0, 0
+            if m_res:
+                for m in m_res:
+                    if m['ItemType'] == 'Movie': movies = m['c']
+                    elif m['ItemType'] == 'Episode': eps = m['c']
+            total = movies + eps
+            if total > 20:
+                if movies / total > 0.7: badges.append({"id": "movie_lover", "name": "电影鉴赏家", "icon": "fa-film", "color": "text-blue-500", "bg": "bg-blue-100", "desc": "沉浸在两小时的艺术光影世界"})
+                elif eps / total > 0.7: badges.append({"id": "tv_lover", "name": "追剧狂魔", "icon": "fa-tv", "color": "text-purple-500", "bg": "bg-purple-100", "desc": "一集接一集，根本停不下来"})
+        except: pass
+
         return {"status": "success", "data": badges}
     except: return {"status": "success", "data": []}
 
