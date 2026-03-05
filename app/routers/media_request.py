@@ -424,3 +424,50 @@ def batch_manage_action(data: BulkAdminActionModel, request: Request):
 @router.post("/api/manage/requests/action")
 def manage_request_action(data: AdminActionModel, request: Request):
     return batch_manage_action(BulkAdminActionModel(items=[{"tmdb_id": data.tmdb_id, "season": data.season}], action=data.action, reject_reason=data.reject_reason), request)
+
+# ==========================================================
+# 🔥 全局通知中心极速探针 API
+# ==========================================================
+@router.get("/api/requests/pending_notify")
+def get_pending_notify(request: Request):
+    # 仅允许后台管理员访问，防止前台用户触发轮询
+    if not request.session.get("user"): return {"status": "error"}
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        # 极速统计待处理总数
+        c.execute("SELECT COUNT(*) as cnt FROM media_requests WHERE status = 0")
+        count_row = c.fetchone()
+        count = count_row['cnt'] if count_row else 0
+        
+        # 极速获取最新的 5 条待处理记录
+        query = """
+            SELECT m.tmdb_id, m.media_type, m.title, m.poster_path, m.season, m.created_at,
+                   GROUP_CONCAT(COALESCE(r.username, '未知用户'), ', ') as users
+            FROM media_requests m
+            LEFT JOIN request_users r ON m.tmdb_id = r.tmdb_id AND m.season = r.season
+            WHERE m.status = 0
+            GROUP BY m.tmdb_id, m.season
+            ORDER BY m.created_at DESC
+            LIMIT 5
+        """
+        c.execute(query)
+        rows = c.fetchall()
+        conn.close()
+        
+        items = []
+        for r in rows:
+            items.append({
+                "id": f"{r['tmdb_id']}_{r['season']}",
+                "title": r['title'] + (f" (第{r['season']}季)" if r['media_type'] == 'tv' else ""),
+                "poster": r['poster_path'],
+                "users": r['users'],
+                "time": r['created_at']
+            })
+            
+        return {"status": "success", "count": count, "items": items}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
