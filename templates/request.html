@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Emby Pulse 用户中心</title>
+    <title>求片中心 - EmbyPulse</title>
     
     <link rel="manifest" href="/request_manifest.json">
     <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Emby Pulse用户中心">
+    <meta name="apple-mobile-web-app-title" content="求片中心">
     <link rel="apple-touch-icon" href="/static/img/logo-app.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -38,7 +38,6 @@
         .dark .glass-panel { background: rgba(24, 24, 27, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
         .poster-card { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s; }
         .poster-card:hover { transform: scale(1.05); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); z-index: 10; }
         .dark .poster-card:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,0.6); }
@@ -62,7 +61,7 @@
         <div class="w-full max-w-md glass-panel rounded-3xl p-8 relative overflow-hidden">
             <div class="text-center mb-8 relative z-10">
                 <span class="text-4xl block mb-2 drop-shadow-lg">🍿</span>
-                <h2 class="text-2xl font-extrabold tracking-tight">EmbyPulse 用户中心</h2>
+                <h2 class="text-2xl font-extrabold tracking-tight">EmbyPulse 求片</h2>
                 <p class="text-slate-500 dark:text-zinc-400 mt-2 text-sm">请输入 Emby 账号密码</p>
             </div>
             <form @submit.prevent="login()" class="space-y-5 relative z-10">
@@ -80,13 +79,21 @@
         
         <nav class="fixed top-0 w-full z-40 glass-panel border-b border-slate-200/50 dark:border-white/5 rounded-none transition-all duration-300" :class="scrolled ? 'shadow-md dark:shadow-black/50' : ''">
             <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+                
                 <div class="flex items-center gap-3 shrink-0 transition-all duration-300" :class="scrolled ? 'w-0 overflow-hidden opacity-0 sm:w-auto sm:opacity-100 sm:overflow-visible' : 'w-auto opacity-100'">
                     <span class="text-2xl drop-shadow-md">🍿</span>
                     <h1 class="text-lg font-bold tracking-wide text-slate-800 dark:text-zinc-100 whitespace-nowrap">EmbyPulse</h1>
                 </div>
                 
-                <div class="flex-1 transition-all duration-500 ease-in-out origin-right flex justify-end sm:justify-center"
-                     :class="scrolled ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8 pointer-events-none'">
+                <div class="flex-1 transition-all duration-500 ease-in-out flex items-center"
+                     :class="{
+                        'opacity-100 translate-x-0': scrolled,
+                        'opacity-0 pointer-events-none': !scrolled,
+                        'translate-x-8': !scrolled && currentTab === 'explore',
+                        '-translate-x-4': !scrolled && currentTab !== 'explore',
+                        'justify-end sm:justify-center': currentTab === 'explore',
+                        'justify-start sm:justify-center': currentTab !== 'explore'
+                     }">
                     
                     <form x-show="currentTab === 'explore'" @submit.prevent="searchMedia()" class="relative flex items-center bg-white dark:bg-[#18181b] border border-slate-200 dark:border-white/10 rounded-full px-3 py-1.5 w-full max-w-md shadow-sm transition-all focus-within:ring-2 focus-within:ring-brand-500/50">
                         <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -115,7 +122,7 @@
             </div>
         </nav>
 
-        <main class="pt-24 max-w-7xl mx-auto px-4 pb-24 sm:pb-12">
+        <main class="pt-24 max-w-7xl mx-auto px-4 pb-24 sm:pb-28">
             
             <div x-show="currentTab === 'explore'" class="text-center py-6 space-y-3 transition-all duration-300" :class="scrolled ? 'opacity-0 scale-95 h-0 overflow-hidden py-0 mb-0' : 'opacity-100 scale-100'">
                 <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight">探索宇宙，一键追剧</h2>
@@ -131,17 +138,6 @@
                         <svg x-show="isSearching" class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                     </button>
                 </form>
-            </div>
-
-            <div class="hidden sm:flex justify-center mb-8">
-                <div class="glass-panel p-1 rounded-full inline-flex relative w-80 bg-slate-200/50 dark:bg-black/30">
-                    <div class="absolute inset-y-1 left-1 w-[calc(33.33%-4px)] bg-white dark:bg-zinc-800 rounded-full transition-transform duration-300 ease-out shadow-sm border border-slate-200 dark:border-white/5" 
-                         :class="currentTab === 'explore' ? 'translate-x-0' : (currentTab === 'queue' ? 'translate-x-full' : 'translate-x-[200%]')"></div>
-                    
-                    <button @click="switchTab('explore')" class="flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors" :class="currentTab === 'explore' ? 'text-brand-600 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500'">🧭 求片大厅</button>
-                    <button @click="switchTab('queue')" class="flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors" :class="currentTab === 'queue' ? 'text-brand-600 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500'">📝 进度</button>
-                    <button @click="switchTab('profile')" class="flex-1 relative z-10 py-2.5 text-sm font-bold transition-colors" :class="currentTab === 'profile' ? 'text-brand-600 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500'">👤 我的</button>
-                </div>
             </div>
 
             <div class="min-h-[500px]">
@@ -354,17 +350,17 @@
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
                             <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5">
-                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-desktop text-emerald-500 mr-1.5 text-lg"></i> 硬件终端分布</h4>
+                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-desktop text-emerald-500 mr-1.5 text-lg"></i> 终端分布</h4>
                                 <div class="relative h-36 w-full"><canvas id="profileDeviceChart"></canvas></div>
                             </div>
                             <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5">
-                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-clapperboard text-fuchsia-500 mr-1.5 text-lg"></i> 播放软件偏好</h4>
+                                <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-clapperboard text-fuchsia-500 mr-1.5 text-lg"></i> 软件偏好</h4>
                                 <div class="relative h-36 w-full"><canvas id="profileClientChart"></canvas></div>
                             </div>
                         </div>
 
                         <div class="glass-panel p-5 rounded-3xl mt-5 mb-10 border-t border-white/40 dark:border-white/5">
-                            <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-list-check text-gray-400 mr-1.5 text-lg"></i> 最近播放足迹</h4>
+                            <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-shoe-prints text-gray-400 mr-1.5 text-lg"></i> 最近播放足迹</h4>
                             <div class="space-y-3">
                                 <template x-for="log in (userStats?.logs || []).slice(0, 10)" :key="log.DateCreated">
                                     <div class="flex justify-between items-center bg-white/50 dark:bg-black/20 p-3 rounded-2xl border border-slate-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/5 transition-colors">
@@ -404,6 +400,24 @@
                 </button>
             </div>
         </div>
+
+        <div class="hidden sm:flex fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-transform duration-300 hover:-translate-y-1">
+            <div class="glass-panel p-1.5 rounded-full inline-flex relative w-[420px] bg-white/90 dark:bg-[#18181b]/90 shadow-[0_15px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_15px_50px_rgba(0,0,0,0.6)] border border-slate-200/80 dark:border-white/10 backdrop-blur-2xl">
+                <div class="absolute inset-y-1.5 left-1.5 w-[calc(33.33%-4px)] bg-slate-100 dark:bg-zinc-800 rounded-full transition-transform duration-300 ease-out shadow-sm border border-slate-200/50 dark:border-white/5" 
+                     :class="currentTab === 'explore' ? 'translate-x-0' : (currentTab === 'queue' ? 'translate-x-full' : 'translate-x-[200%]')"></div>
+                
+                <button @click="switchTab('explore'); window.scrollTo({top:0, behavior:'smooth'})" class="flex-1 relative z-10 py-3 text-sm font-bold transition-colors flex justify-center items-center gap-2" :class="currentTab === 'explore' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white'">
+                    <i class="fa-solid fa-film text-lg"></i> 发现
+                </button>
+                <button @click="switchTab('queue'); window.scrollTo({top:0, behavior:'smooth'})" class="flex-1 relative z-10 py-3 text-sm font-bold transition-colors flex justify-center items-center gap-2" :class="currentTab === 'queue' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white'">
+                    <i class="fa-solid fa-list-check text-lg"></i> 进度
+                </button>
+                <button @click="switchTab('profile'); window.scrollTo({top:0, behavior:'smooth'})" class="flex-1 relative z-10 py-3 text-sm font-bold transition-colors flex justify-center items-center gap-2" :class="currentTab === 'profile' ? 'text-brand-600 dark:text-brand-400' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white'">
+                    <i class="fa-solid fa-user-astronaut text-lg"></i> 我的
+                </button>
+            </div>
+        </div>
+
     </div>
 
     <div x-show="isModalOpen" class="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4" x-cloak>
@@ -515,7 +529,6 @@
                 trendingMovies: [], trendingTv: [], topMovies: [], topTv: [], 
                 myQueue: [],
                 
-                // 数据洞察状态
                 userStats: null, userBadges: [], userTrend: null, isStatsLoading: false, statsLoaded: false,
                 charts: { hour: null, device: null, client: null, trend: null },
 
@@ -592,19 +605,16 @@
                     }
                 },
 
-                // 🔥 核心图表渲染逻辑
                 renderCharts() {
                     this.$nextTick(() => {
-                        if (!window.Chart) return;
+                        if (!window.Chart || !this.userStats) return;
                         
                         const isDark = this.isDarkMode;
-                        const textColor = isDark ? '#a1a1aa' : '#64748b'; // zinc-400 : slate-500
-                        const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                        const textColor = isDark ? '#a1a1aa' : '#64748b'; 
                         const macaronColors = ['#10b981', '#3b82f6', '#8b5cf6', '#6366f1', '#14b8a6', '#64748b'];
                         const warmColors = ['#f43f5e', '#f59e0b', '#ec4899', '#f97316', '#d946ef', '#64748b'];
                         const borderColor = isDark ? '#18181b' : '#ffffff';
 
-                        // 1. 小时分布图
                         if (document.getElementById('profileHourChart')) {
                             if (this.charts.hour) this.charts.hour.destroy();
                             const ctx = document.getElementById('profileHourChart').getContext('2d');
@@ -620,7 +630,6 @@
                             });
                         }
 
-                        // 2. 硬件分布图
                         if (document.getElementById('profileDeviceChart') && this.userStats.devices) {
                             if (this.charts.device) this.charts.device.destroy();
                             const ctx = document.getElementById('profileDeviceChart').getContext('2d');
@@ -634,7 +643,6 @@
                             });
                         }
 
-                        // 3. 软件偏好图
                         if (document.getElementById('profileClientChart') && this.userStats.clients) {
                             if (this.charts.client) this.charts.client.destroy();
                             const ctx = document.getElementById('profileClientChart').getContext('2d');
@@ -648,12 +656,11 @@
                             });
                         }
 
-                        // 4. 频率趋势图
                         if (document.getElementById('profileTrendChart') && this.userTrend) {
                             if (this.charts.trend) this.charts.trend.destroy();
                             const ctx = document.getElementById('profileTrendChart').getContext('2d');
-                            const labels = Object.keys(this.userTrend).map(k => k.substring(5)); // 'MM-DD'
-                            const values = Object.values(this.userTrend).map(v => Math.round(v/3600)); // Hours
+                            const labels = Object.keys(this.userTrend).map(k => k.substring(5));
+                            const values = Object.values(this.userTrend).map(v => Math.round(v/3600)); 
                             this.charts.trend = new Chart(ctx, {
                                 type: 'line',
                                 data: { labels, datasets: [{ data: values, borderColor: isDark ? '#38bdf8' : '#0ea5e9', backgroundColor: isDark ? 'rgba(56,189,248,0.15)' : 'rgba(14,165,233,0.15)', fill: true, tension: 0.4, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4 }] },
