@@ -128,6 +128,10 @@ class FeedbackSubmitModel(BaseModel):
 
 class FeedbackActionModel(BaseModel):
     id: int
+    action: str 
+
+class BulkFeedbackActionModel(BaseModel):
+    items: List[int]
     action: str
 
 @router.post("/api/requests/auth")
@@ -331,7 +335,7 @@ def manage_request_action(data: AdminActionModel, request: Request):
     return batch_manage_action(BulkAdminActionModel(items=[{"tmdb_id": data.tmdb_id, "season": data.season}], action=data.action, reject_reason=data.reject_reason), request)
 
 
-# ================= 🔥 恢复：后台铃铛与悬浮通知核心引擎 =================
+# ================= 🔥 完美修复：后台铃铛与悬浮通知核心引擎 =================
 @router.get("/api/requests/pending_notify")
 def get_pending_notify(request: Request):
     if not request.session.get("user"): return {"status": "error"}
@@ -345,11 +349,16 @@ def get_pending_notify(request: Request):
         c.execute("SELECT m.tmdb_id, m.media_type, m.title, m.poster_path, m.season, m.created_at, GROUP_CONCAT(COALESCE(r.username, '未知用户'), ', ') as users FROM media_requests m LEFT JOIN request_users r ON m.tmdb_id = r.tmdb_id AND m.season = r.season WHERE m.status = 0 GROUP BY m.tmdb_id, m.season ORDER BY m.created_at DESC LIMIT 5")
         req_rows = c.fetchall()
 
-        # 2. 获取新报错反馈
+        # 2. 获取新报错反馈 (智能提取海报)
         c.execute("SELECT COUNT(*) as cnt FROM media_feedback WHERE status = 0")
         feed_count = (c.fetchone() or {'cnt': 0})['cnt']
         
-        c.execute("SELECT id, item_name, username, issue_type, created_at FROM media_feedback WHERE status = 0 ORDER BY created_at DESC LIMIT 5")
+        c.execute("""
+            SELECT f.id, f.item_name, f.username, f.issue_type, f.created_at,
+                   (SELECT poster_path FROM media_requests m WHERE m.title = f.item_name LIMIT 1) as poster
+            FROM media_feedback f 
+            WHERE f.status = 0 ORDER BY f.created_at DESC LIMIT 5
+        """)
         feed_rows = c.fetchall()
         
         conn.close()
@@ -361,21 +370,21 @@ def get_pending_notify(request: Request):
                 "title": r['title'] + (f" (第{r['season']}季)" if r['media_type'] == 'tv' else ""), 
                 "poster": r['poster_path'], 
                 "users": r['users'], 
-                "time": r['created_at']
+                "time": r['created_at'],
+                "type": "request"
             })
             
         for f in feed_rows:
             items.append({
                 "id": f"feed_{f['id']}",
                 "title": f"⚠️ 报错: {f['item_name']}",
-                "poster": "", 
+                "poster": f['poster'] or "", # 如果没找到海报则留空
                 "users": f"{f['username']} - {f['issue_type']}",
-                "time": f['created_at']
+                "time": f['created_at'],
+                "type": "feedback"
             })
             
-        # 按时间融合排序，永远展示最新动态
         items.sort(key=lambda x: x['time'], reverse=True)
-        
         return {"status": "success", "count": req_count + feed_count, "items": items[:5]}
     except Exception as e: return {"status": "error", "message": str(e)}
 
@@ -439,3 +448,15 @@ def manage_feedback_action(data: FeedbackActionModel, request: Request):
     else: c.execute("UPDATE media_feedback SET status = ? WHERE id = ?", (st, data.id))
     conn.commit(); conn.close()
     return {"status": "success", "message": "已更新工单状态"}
+
+@router.post("/api/manage/feedback/batch")
+def batch_feedback_action(data: BulkFeedbackActionModel, request: Request):
+    if not request.session.get("user"): return {"status": "error"}
+    status_map = {"fix": 1, "done": 2, "reject": 3, "delete": -1}
+    st = status_map.get(data.action, 0)
+    conn = sqlite3.connect(DB_PATH); c = conn.cursor()
+    for fid in data.items:
+        if st == -1: c.execute("DELETE FROM media_feedback WHERE id = ?", (fid,))
+        else: c.execute("UPDATE media_feedback SET status = ? WHERE id = ?", (st, fid))
+    conn.commit(); conn.close()
+    return {"status": "success", "message": "批量操作已完成"}
