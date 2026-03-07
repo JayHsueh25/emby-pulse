@@ -5,6 +5,8 @@ import concurrent.futures
 from datetime import datetime
 from pydantic import BaseModel
 import time
+import urllib.parse
+import json
 
 from app.core.config import cfg
 from app.core.database import query_db
@@ -90,7 +92,9 @@ def run_scan_task():
             use_new_route = is_new_emby_router(sys_info)
         except: server_id = ""; use_new_route = True
 
+        # 🔥 初始化所有的必要数据库表 (包括缓存表)
         query_db("CREATE TABLE IF NOT EXISTS gap_perfect_series (series_id TEXT PRIMARY KEY, tmdb_id TEXT, series_name TEXT, marked_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
+        query_db("CREATE TABLE IF NOT EXISTS gap_scan_cache (id INTEGER PRIMARY KEY, result_json TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)")
 
         records = query_db("SELECT series_id, season_number, episode_number, status FROM gap_records")
         lock_map = {f"{r['series_id']}_{r['season_number']}_{r['episode_number']}": r['status'] for r in records} if records else {}
@@ -123,7 +127,14 @@ def run_scan_task():
             for future in concurrent.futures.as_completed(futures):
                 res = future.result()
                 if res: results.append(res)
+        
         with state_lock: scan_state["results"] = results
+
+        # 🔥 核心：保存结果快照，防重启丢失
+        if results:
+            try: query_db("INSERT OR REPLACE INTO gap_scan_cache (id, result_json, updated_at) VALUES (1, ?, datetime('now', 'localtime'))", (json.dumps(results),))
+            except: pass
+
     except Exception as e:
         with state_lock: scan_state["error"] = str(e)
     finally:
@@ -152,7 +163,14 @@ def start_scan(bg_tasks: BackgroundTasks):
 
 @router.get("/scan/progress")
 def get_progress():
-    with state_lock: return {"status": "success", "data": scan_state}
+    with state_lock:
+        # 🔥 核心：如果内存为空且没有在扫描，尝试从数据库恢复快照
+        if not scan_state["is_scanning"] and not scan_state["results"]:
+            try:
+                row = query_db("SELECT result_json FROM gap_scan_cache WHERE id = 1")
+                if row: scan_state["results"] = json.loads(row[0]['result_json'])
+            except: pass
+        return {"status": "success", "data": scan_state}
 
 @router.post("/scan/auto_toggle")
 def toggle_auto_scan(payload: dict):
@@ -226,29 +244,31 @@ def search_mp_for_gap(req: GapSearchReq):
         except: pass
     if not genes: genes = ["无明显特效"]
     
-    keyword = f"{req.series_name} S{str(req.season).zfill(2)}E{str(req.episode).zfill(2)}"
     clean_token = mp_token.strip().strip("'\"")
-    
-    # 🔥 终极修复 MP 403: 拔除 Authorization: Bearer，只使用 X-API-KEY。因为如果传入了 Bearer，
-    # MP 底层的 FastAPI 框架会强行去解密 JWT，解密失败就直接返回 403 Forbidden！
-    headers = {
-        "X-API-KEY": clean_token,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
-        "Accept": "application/json"
-    }
+    headers = {"X-API-KEY": clean_token, "User-Agent": "Mozilla/5.0", "Accept": "application/json"}
     
     try:
-        mp_search_url = f"{mp_url.rstrip('/')}/api/v1/search/title"
-        mp_res = requests.get(mp_search_url, params={"keyword": keyword}, headers=headers, timeout=20)
+        # 🔥 第 1 波：正常精准搜单集
+        keyword = f"{req.series_name} S{str(req.season).zfill(2)}E{str(req.episode).zfill(2)}"
+        encoded_keyword = urllib.parse.quote(keyword)
+        mp_res = requests.get(f"{mp_url.rstrip('/')}/api/v1/search/title?keyword={encoded_keyword}", headers=headers, timeout=20)
+        results = mp_res.json() if mp_res.status_code == 200 else []
         
-        if mp_res.status_code == 404:
-            mp_search_url = f"{mp_url.rstrip('/')}/api/v1/search"
-            mp_res = requests.get(mp_search_url, params={"keyword": keyword}, headers=headers, timeout=20)
-            
-        if mp_res.status_code != 200:
-            return {"status": "error", "message": f"被 MoviePilot 拦截 (HTTP {mp_res.status_code})"}
-            
-        results = mp_res.json()
+        # 🔥 类型护盾：防止 MP 返回报错 dict 导致 get 异常
+        if isinstance(results, dict): results = results.get("data") or results.get("results") or []
+        if not isinstance(results, list): results = []
+
+        is_pack = False
+        # 🔥 第 2 波：智能降级搜整季 (如果单集搜不到)
+        if len(results) == 0:
+            fallback_kw = f"{req.series_name} S{str(req.season).zfill(2)}"
+            mp_res2 = requests.get(f"{mp_url.rstrip('/')}/api/v1/search/title?keyword={urllib.parse.quote(fallback_kw)}", headers=headers, timeout=20)
+            results2 = mp_res2.json() if mp_res2.status_code == 200 else []
+            if isinstance(results2, dict): results2 = results2.get("data") or results2.get("results") or []
+            if not isinstance(results2, list): results2 = []
+            results = results2
+            is_pack = True  # 标记为整季包
+
         for r in results:
             score = 0; combined_text = r.get("title", "").upper() + " " + r.get("description", "").upper()
             if "4K" in genes: score += 50 if ("2160P" in combined_text or "4K" in combined_text) else -20
@@ -257,6 +277,7 @@ def search_mp_for_gap(req: GapSearchReq):
             if "HDR" in genes and "HDR" in combined_text: score += 20
             if "WEB" in combined_text: score += 10
             r["match_score"] = score
+            r["is_pack"] = is_pack # 🔥 传给前端 UI 显示徽章
             tags = []
             if "2160P" in combined_text or "4K" in combined_text: tags.append("4K")
             elif "1080P" in combined_text: tags.append("1080P")
@@ -264,6 +285,7 @@ def search_mp_for_gap(req: GapSearchReq):
             elif "HDR" in combined_text: tags.append("HDR")
             if "WEB" in combined_text: tags.append("WEB-DL")
             r["extracted_tags"] = tags
+
         results.sort(key=lambda x: x["match_score"], reverse=True)
         return {"status": "success", "data": {"genes": genes, "results": results[:10]}}
     except Exception as e: return {"status": "error", "message": str(e)}
@@ -271,9 +293,17 @@ def search_mp_for_gap(req: GapSearchReq):
 @router.post("/download")
 def download_gap_item(req: GapDownloadReq):
     mp_url = cfg.get("moviepilot_url"); mp_token = cfg.get("moviepilot_token")
-    clean_token = mp_token.strip().strip("'\""); headers = {"X-API-KEY": clean_token, "Authorization": f"Bearer {clean_token}"}
+    clean_token = mp_token.strip().strip("'\""); headers = {"X-API-KEY": clean_token}
+    
+    torrent_info = req.torrent_info
+    # 🔥 核心技术：手术刀级提取！如果是季包，强行写入单集参数，逼迫 MP/QB 仅下载这一集
+    if torrent_info.get("is_pack"):
+        torrent_info["season"] = req.season
+        torrent_info["episodes"] = [req.episode]
+        torrent_info["episode"] = [req.episode] # 兼容双参数规范
+
     try:
-        res = requests.post(f"{mp_url.rstrip('/')}/api/v1/download/", headers=headers, json=req.torrent_info, timeout=10)
+        res = requests.post(f"{mp_url.rstrip('/')}/api/v1/download/", headers=headers, json=torrent_info, timeout=10)
         if res.status_code == 200:
             query_db("INSERT INTO gap_records (series_id, series_name, season_number, episode_number, status) VALUES (?, ?, ?, ?, 2) ON CONFLICT(series_id, season_number, episode_number) DO UPDATE SET status = 2", (req.series_id, req.series_name, req.season, req.episode))
             return {"status": "success", "message": "已派单给 MP"}
