@@ -106,17 +106,17 @@
                                     </div>
                                     
                                     <div class="flex flex-wrap gap-1 sm:gap-1.5 flex-1 items-center">
+                                        
                                         <template x-for="ep in seasonGroup.episodes" :key="ep.episode">
-                                            <button x-show="ep.status === 0" @click="openResolver(series, ep)" 
-                                                    class="px-2 py-1 rounded text-[10px] sm:text-[11px] font-bold bg-white dark:bg-[#0a0a0a] text-rose-600 border border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 dark:text-rose-400 dark:border-rose-500/30 dark:hover:bg-rose-500 dark:hover:text-white transition-colors shadow-sm" title="点击补全该集">
-                                                <span x-text="ep.episode"></span>
-                                            </button>
-                                            <div x-show="ep.status === 2" 
-                                                 class="px-2 py-1 rounded flex items-center justify-center cursor-help text-[10px] sm:text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 relative overflow-hidden shadow-sm" title="MP 处理中">
-                                                <div class="absolute inset-x-0 bottom-0 bg-blue-200 dark:bg-blue-500/40 animate-pulse h-1/2"></div>
+                                            <button @click="openResolver(series, ep)" 
+                                                    class="px-2 py-1 rounded text-[10px] sm:text-[11px] font-bold transition-colors shadow-sm relative overflow-hidden border"
+                                                    :class="ep.status === 2 ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30 dark:hover:bg-blue-500/30' : 'bg-white dark:bg-[#0a0a0a] text-rose-600 border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 dark:text-rose-400 dark:border-rose-500/30 dark:hover:bg-rose-500 dark:hover:text-white'"
+                                                    :title="ep.status === 2 ? '处理中 (点击可重新配型换种)' : '点击补全该集'">
+                                                <div x-show="ep.status === 2" class="absolute inset-x-0 bottom-0 bg-blue-200 dark:bg-blue-500/40 animate-pulse h-1/2"></div>
                                                 <span class="relative z-10" x-text="ep.episode"></span>
-                                            </div>
+                                            </button>
                                         </template>
+
                                         <button @click="openResolverMulti(series, seasonGroup.season_num, seasonGroup.episodes)" class="hidden sm:flex px-1.5 py-1 rounded text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-500 hover:text-white transition-colors shadow-sm items-center gap-1 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800" title="一键搜索季包并提取所有缺失集"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
                                     </div>
                                 </div>
@@ -237,7 +237,7 @@
                 <button x-show="resolver.targetType === 'single'" @click="ignoreGap()" class="px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600 transition shadow-sm flex items-center justify-center gap-2"><i class="fa-solid fa-eye-slash"></i> <span class="hidden sm:inline">忽略单集</span></button>
                 <button @click="sendToMP()" :disabled="resolver.selectedIndex === null || resolver.isSubmitting" class="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" :class="resolver.selectedIndex !== null ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 dark:bg-gray-600 shadow-none'">
                     <span x-show="resolver.isSubmitting" class="animate-spin w-4 h-4 border-2 border-white/30 border-t-white dark:border-black/30 dark:border-t-black rounded-full"></span>
-                    <span x-show="!resolver.isSubmitting">提交 MP 免填单提取</span>
+                    <span x-show="!resolver.isSubmitting">提交 MP 免填单</span>
                 </button>
             </div>
         </div>
@@ -368,8 +368,8 @@ document.addEventListener('alpine:init', () => {
             } catch(e) {}
         },
 
+        // 🔥 解除了 ep.status === 2 时不可点击的限制，现在蓝色方块也能唤起它！
         async openResolver(series, ep) {
-            if (ep.status === 2) return; 
             this.resolver.open = true; this.resolver.isLoading = true; this.resolver.targetType = 'single';
             this.resolver.tmdbId = series.tmdb_id; 
             this.resolver.seriesId = series.series_id; this.resolver.seriesName = series.series_name; this.resolver.season = ep.season; 
@@ -388,8 +388,9 @@ document.addEventListener('alpine:init', () => {
             this.resolver.isLoading = false;
         },
 
+        // 🔥 批量提取时，允许把已经变蓝(status=2)的集数也一起带上，重新下发！
         async openResolverMulti(series, season_num, epsArray) {
-            const missingEps = epsArray.filter(e => e.status === 0).map(e => e.episode);
+            const missingEps = epsArray.filter(e => e.status === 0 || e.status === 2).map(e => e.episode);
             if(missingEps.length === 0) return;
 
             this.resolver.open = true; this.resolver.isLoading = true; this.resolver.targetType = 'multi';
@@ -441,7 +442,6 @@ document.addEventListener('alpine:init', () => {
                         });
                     }
                     this.closeResolver(); 
-                    // 这里不用弹出成功，给用户无感知的极速体验，按钮变蓝即可
                 } else { 
                     alert(data.message); 
                 }

@@ -13,6 +13,7 @@ from app.routers.search import get_emby_sys_info, is_new_emby_router
 
 router = APIRouter(prefix="/api/gaps", tags=["gaps"])
 
+# ----------------- 异步状态机 -----------------
 scan_state = {"is_scanning": False, "progress": 0, "total": 0, "current_item": "系统准备中...", "results": [], "error": None}
 state_lock = threading.Lock()
 
@@ -236,7 +237,6 @@ def unignore_item(payload: dict):
         return {"status": "success"}
     except Exception as e: return {"status": "error"}
 
-
 @router.post("/search_mp")
 def search_mp_for_gap(payload: dict):
     series_id = payload.get("series_id")
@@ -307,7 +307,6 @@ def search_mp_for_gap(payload: dict):
             combined_text = title_str.upper() + " " + desc_str.upper()
             size_val = deep_extract(r, ["size", "enclosure_size", "torrent_size"]) or 0
             
-            # 🔥 提取并挂载 UI 数据：站点名称和做种人数
             site_val = deep_extract(r, ["site_name", "site", "indexer"]) or "未知站点"
             seeders_val = deep_extract(r, ["seeders", "seeder"]) or 0
             
@@ -326,7 +325,7 @@ def search_mp_for_gap(payload: dict):
             
             r["match_score"] = score
             r["is_pack"] = is_pack 
-            r["org_payload"] = r.get("torrent_info", r) # 带着 Cookie 的完美字典
+            r["org_payload"] = r.get("torrent_info", r) 
             
             tags = []
             if "2160P" in combined_text or "4K" in combined_text: tags.append("4K")
@@ -357,11 +356,11 @@ def download_gap_item(payload: dict):
     
     pure_torrent_in = torrent_info.get("org_payload", torrent_info)
     
-    # 🔥 核心：双重注入集数参数，强制触发 MP 的提取过滤规则！
+    # 🔥 双管齐下激活文件过滤：既传 episode 也传 episodes，确保 MP 底层下载器 100% 拦截其余文件！
     if torrent_info.get("is_pack", False) or len(episodes) > 1:
         pure_torrent_in["season"] = int(season) if season else 1
+        pure_torrent_in["episode"] = [int(e) for e in episodes] 
         pure_torrent_in["episodes"] = [int(e) for e in episodes] 
-        pure_torrent_in["episode"] = [int(e) for e in episodes] # MP 各版本可能字段不同，双管齐下保平安！
 
     mp_payload = {"torrent_in": pure_torrent_in}
     if tmdbid:
@@ -370,7 +369,7 @@ def download_gap_item(payload: dict):
 
     try:
         add_url = f"{mp_url.rstrip('/')}/api/v1/download/add"
-        # 🔥 超时时间增加到 60 秒！等待 MP 慢慢刮削字幕
+        # 超时放宽至 60 秒，等待 MP 下载字幕
         res = requests.post(add_url, headers=headers, json=mp_payload, timeout=60)
         
         if res.status_code in [200, 201]:
@@ -390,7 +389,7 @@ def download_gap_item(payload: dict):
                             if ep_obj["season"] == int(season) and ep_obj["episode"] in [int(e) for e in episodes]:
                                 ep_obj["status"] = 2
 
-            return {"status": "success", "message": f"成功下发，MP 将提取过滤 {len(episodes)} 集！"}
+            return {"status": "success", "message": f"成功下发，已触发 MP 过滤下载 {len(episodes)} 集！"}
             
         return {"status": "error", "message": f"MP 接口拒绝 (HTTP {res.status_code})"}
     except Exception as e: 
