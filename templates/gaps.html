@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}缺集管理 - EmbyPulse{% end block %}
+{% block title %}缺集管理 - EmbyPulse{% endblock %}
 
 {% block head %}
 <style>
@@ -20,7 +20,7 @@
     .ep-box { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     .ep-box:hover { transform: scale(1.15) translateY(-2px); z-index: 10; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
 </style>
-{% end block %}
+{% endblock %}
 
 {% block content %}
 <div x-data="gapManager()" x-init="init()" class="max-w-6xl mx-auto space-y-6">
@@ -313,4 +313,4 @@ document.addEventListener('alpine:init', () => {
     }));
 });
 </script>
-{% end block %}
+{% endblock %}
