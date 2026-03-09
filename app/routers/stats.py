@@ -4,6 +4,7 @@ from app.core.config import cfg
 from app.core.database import query_db, get_base_filter
 import requests
 import re
+import datetime
 
 router = APIRouter()
 
@@ -209,7 +210,6 @@ def api_user_details(user_id: Optional[str] = None):
     try:
         where, params = get_base_filter(user_id)
         
-        # 🔥 修复装甲 1：使用 substr(DateCreated, 1, 19) 截断毫秒，兼容 SQLite
         h_res = query_db(f"SELECT strftime('%H', substr(DateCreated, 1, 19)) as Hour, COUNT(*) as Plays FROM PlaybackActivity {where} GROUP BY Hour", params)
         h_data = {str(i).zfill(2): 0 for i in range(24)}
         if h_res:
@@ -239,15 +239,48 @@ def api_user_details(user_id: Optional[str] = None):
             overview['total_duration'] = ov_res[0]['Dur'] or 0
             overview['avg_duration'] = round(overview['total_duration'] / overview['total_plays'])
             
-            # 🔥 修复装甲 2：使用极简正则提取 YYYY-MM-DD，无视格式坑
+            # 1. 兜底方案：先用播放记录里最早的时间算天数 (防止后续 API 挂了)
             if ov_res[0]['FirstDate']:
-                import datetime
                 try:
                     m = re.search(r'(\d{4})-(\d{2})-(\d{2})', str(ov_res[0]['FirstDate']))
                     if m:
                         fd = datetime.datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
                         overview['account_age_days'] = max(1, (datetime.datetime.now() - fd).days)
                 except: pass
+
+        # 🚀 2. 终极真理方案：直接向 Emby API 索要账号的真实创建时间！
+        try:
+            host = cfg.get("emby_host")
+            key = cfg.get("emby_api_key")
+            if host and key:
+                if user_id and user_id != 'all':
+                    # 查询单个用户的创建时间
+                    u_res = requests.get(f"{host}/emby/Users/{user_id}?api_key={key}", timeout=5)
+                    if u_res.status_code == 200:
+                        dc = u_res.json().get("DateCreated")
+                        if dc:
+                            m = re.search(r'(\d{4})-(\d{2})-(\d{2})', str(dc))
+                            if m:
+                                fd = datetime.datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                                overview['account_age_days'] = max(1, (datetime.datetime.now() - fd).days)
+                else:
+                    # 查询所有用户，找出全服最老的一个（代表建站天数）
+                    u_res = requests.get(f"{host}/emby/Users?api_key={key}", timeout=5)
+                    if u_res.status_code == 200:
+                        earliest_date = None
+                        for u in u_res.json():
+                            dc = u.get("DateCreated")
+                            if dc:
+                                m = re.search(r'(\d{4})-(\d{2})-(\d{2})', str(dc))
+                                if m:
+                                    dt = datetime.datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                                    if not earliest_date or dt < earliest_date:
+                                        earliest_date = dt
+                        if earliest_date:
+                            overview['account_age_days'] = max(1, (datetime.datetime.now() - earliest_date).days)
+        except Exception as e: 
+            import logging
+            logging.getLogger("uvicorn").error(f"获取账号真实创建时间失败: {e}")
 
         try:
             m_res = query_db(f"SELECT ItemType, COUNT(*) as c FROM PlaybackActivity {where} GROUP BY ItemType", params)
@@ -286,7 +319,6 @@ def api_user_details(user_id: Optional[str] = None):
 def api_chart_stats(user_id: Optional[str] = None, dimension: str = 'day'):
     try:
         where, params = get_base_filter(user_id)
-        # 🔥 加入 substr 装甲
         if dimension == 'week':
             sql = f"SELECT strftime('%Y-%W', substr(DateCreated, 1, 19)) as Label, SUM(PlayDuration) as Duration FROM PlaybackActivity {where} AND DateCreated > date('now', '-120 days') GROUP BY Label ORDER BY Label"
         elif dimension == 'month':
@@ -358,7 +390,6 @@ def api_badges(user_id: Optional[str] = None):
         where, params = get_base_filter(user_id)
         badges = []
         
-        # 🔥 全面加入 substr 装甲，兼容最原生的 SQLite
         night_res = query_db(f"SELECT COUNT(*) as c FROM PlaybackActivity {where} AND strftime('%H', substr(DateCreated, 1, 19)) BETWEEN '02' AND '05'", params)
         if night_res and night_res[0]['c'] > 5: badges.append({"id": "night", "name": "深夜修仙", "icon": "fa-moon", "color": "text-indigo-500", "bg": "bg-indigo-100", "desc": "深夜是灵魂最自由的时刻"})
         
@@ -406,7 +437,6 @@ def api_monthly_stats(user_id: Optional[str] = None):
     try:
         where_base, params = get_base_filter(user_id)
         where = where_base + " AND DateCreated > date('now', '-12 months')"
-        # 🔥 加入 substr 装甲
         sql = f"SELECT strftime('%Y-%m', substr(DateCreated, 1, 19)) as Month, SUM(PlayDuration) as Duration FROM PlaybackActivity {where} GROUP BY Month ORDER BY Month"
         results = query_db(sql, params); data = {}
         if results: 
