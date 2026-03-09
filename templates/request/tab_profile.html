@@ -1,4 +1,4 @@
-<div x-show="currentTab === 'profile'" x-cloak class="w-full pb-6 overflow-x-hidden">
+<div class="w-full pb-6">
     
     <div x-show="isStatsLoading" class="flex justify-center py-20">
         <i class="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i>
@@ -16,7 +16,7 @@
                         <span x-text="userName"></span><i class="fa-solid fa-circle-check text-brand-500 text-sm"></i>
                     </h3>
                     <div class="mt-2 space-y-1">
-                        <div class="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded inline-block">入驻天数：<span x-text="(userStats && userStats.overview ? userStats.overview.account_age_days : 1)"></span> 天</div>
+                        <div class="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded inline-block">入驻天数：<span x-text="userStats?.overview?.account_age_days || 1"></span> 天</div>
                         <div class="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded inline-block">账号有效期：<span x-text="expireDate" :class="expireDate === '永久有效' ? 'text-brand-500' : 'text-rose-500'"></span></div>
                     </div>
                 </div>
@@ -44,15 +44,15 @@
             </div>
 
             <div class="lg:col-span-2 flex flex-col gap-5">
-                <div class="glass-panel p-5 rounded-3xl flex gap-4 sm:gap-6 items-center relative overflow-hidden border-t border-white/40 dark:border-white/5 flex-1" x-show="userStats && userStats.top_fav">
-                    <div class="absolute inset-0 bg-cover bg-center opacity-10 dark:opacity-20 blur-2xl" :style="`background-image: url(/api/proxy/smart_image?item_id=${userStats && userStats.top_fav ? userStats.top_fav.ItemId : ''}&type=Primary)`"></div>
-                    <img :src="`/api/proxy/smart_image?item_id=${userStats && userStats.top_fav ? userStats.top_fav.ItemId : ''}&type=Primary`" class="w-24 h-36 rounded-xl shadow-lg object-cover relative z-10 ring-2 ring-white/50 dark:ring-white/10">
+                <div class="glass-panel p-5 rounded-3xl flex gap-4 sm:gap-6 items-center relative overflow-hidden border-t border-white/40 dark:border-white/5 flex-1" x-show="userStats?.top_fav">
+                    <div class="absolute inset-0 bg-cover bg-center opacity-10 dark:opacity-20 blur-2xl" :style="`background-image: url(/api/proxy/smart_image?item_id=${userStats?.top_fav?.ItemId}&type=Primary)`"></div>
+                    <img :src="`/api/proxy/smart_image?item_id=${userStats?.top_fav?.ItemId}&type=Primary`" class="w-24 h-36 rounded-xl shadow-lg object-cover relative z-10 ring-2 ring-white/50 dark:ring-white/10">
                     <div class="relative z-10 flex-1">
                         <div class="text-[11px] font-black text-rose-500 tracking-widest uppercase mb-1.5"><i class="fa-solid fa-heart mr-1 text-sm"></i> 执念最爱</div>
-                        <h4 class="font-black text-xl text-slate-900 dark:text-white line-clamp-2 leading-tight mb-3" x-text="userStats && userStats.top_fav ? (userStats.top_fav.ItemName || userStats.top_fav.Name) : ''"></h4>
+                        <h4 class="font-black text-xl text-slate-900 dark:text-white line-clamp-2 leading-tight mb-3" x-text="userStats?.top_fav?.ItemName || userStats?.top_fav?.Name"></h4>
                         <div class="flex gap-2">
-                            <span class="text-xs bg-white/60 dark:bg-black/60 px-2 py-1 rounded border border-slate-200 dark:border-white/10 font-bold text-slate-600 dark:text-zinc-300 shadow-sm"><i class="fa-solid fa-repeat text-brand-500 mr-1"></i>N刷 <span x-text="userStats && userStats.top_fav ? (userStats.top_fav.c || userStats.top_fav.Count) : 0"></span> 次</span>
-                            <span class="text-xs bg-white/60 dark:bg-black/60 px-2 py-1 rounded border border-slate-200 dark:border-white/10 font-bold text-slate-600 dark:text-zinc-300 shadow-sm"><i class="fa-solid fa-clock text-blue-500 mr-1"></i>沉迷 <span x-text="Math.round((userStats && userStats.top_fav ? (userStats.top_fav.d || userStats.top_fav.Duration || 0) : 0) / 3600)"></span> 小时</span>
+                            <span class="text-xs bg-white/60 dark:bg-black/60 px-2 py-1 rounded border border-slate-200 dark:border-white/10 font-bold text-slate-600 dark:text-zinc-300 shadow-sm"><i class="fa-solid fa-repeat text-brand-500 mr-1"></i>N刷 <span x-text="userStats?.top_fav?.c || userStats?.top_fav?.Count"></span> 次</span>
+                            <span class="text-xs bg-white/60 dark:bg-black/60 px-2 py-1 rounded border border-slate-200 dark:border-white/10 font-bold text-slate-600 dark:text-zinc-300 shadow-sm"><i class="fa-solid fa-clock text-blue-500 mr-1"></i>沉迷 <span x-text="Math.round((userStats?.top_fav?.d || userStats?.top_fav?.Duration || 0) / 3600)"></span> 小时</span>
                         </div>
                     </div>
                 </div>
@@ -60,7 +60,7 @@
                 <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 flex flex-col flex-1">
                     <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-3"><i class="fa-solid fa-award text-yellow-500 mr-1.5 text-lg"></i> 观影成就</h4>
                     <div class="flex flex-wrap gap-2 items-start" x-show="userBadges.length > 0">
-                        <template x-for="(b, i) in userBadges" :key="'badge-'+i">
+                        <template x-for="b in userBadges" :key="b.id">
                             <div @click="showToast(b.name + '：' + (b.desc || '已解锁该成就'))" class="cursor-pointer hover:scale-105 active:scale-95 transition-transform px-3 py-1.5 rounded-xl text-[11px] font-black shadow-sm dark:bg-opacity-20 border border-transparent flex items-center gap-1.5" :class="b.bg + ' ' + b.color">
                                 <i :class="'fa-solid ' + b.icon"></i><span x-text="b.name"></span>
                             </div>
@@ -73,15 +73,15 @@
 
         <div class="grid grid-cols-3 gap-3 sm:gap-5 mt-5">
             <div class="glass-panel p-4 rounded-2xl border-t border-white/40 dark:border-white/5 text-center shadow-sm">
-                <div class="text-2xl sm:text-3xl font-black font-mono text-slate-800 dark:text-white" x-text="userStats && userStats.overview ? userStats.overview.total_plays : 0"></div>
+                <div class="text-2xl sm:text-3xl font-black font-mono text-slate-800 dark:text-white" x-text="userStats?.overview?.total_plays || 0"></div>
                 <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">总播放次数</div>
             </div>
             <div class="glass-panel p-4 rounded-2xl border-t border-white/40 dark:border-white/5 text-center shadow-sm">
-                <div class="text-2xl sm:text-3xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-br from-brand-500 to-blue-500" x-text="Math.round((userStats && userStats.overview ? userStats.overview.total_duration : 0) / 3600)"></div>
+                <div class="text-2xl sm:text-3xl font-black font-mono text-transparent bg-clip-text bg-gradient-to-br from-brand-500 to-blue-500" x-text="Math.round((userStats?.overview?.total_duration || 0) / 3600)"></div>
                 <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">总沉浸小时</div>
             </div>
             <div class="glass-panel p-4 rounded-2xl border-t border-white/40 dark:border-white/5 text-center shadow-sm">
-                <div class="text-2xl sm:text-3xl font-black font-mono text-slate-800 dark:text-white" x-text="Math.round((userStats && userStats.overview ? userStats.overview.avg_duration : 0) / 60)"></div>
+                <div class="text-2xl sm:text-3xl font-black font-mono text-slate-800 dark:text-white" x-text="Math.round((userStats?.overview?.avg_duration || 0) / 60)"></div>
                 <div class="text-[10px] text-slate-500 dark:text-zinc-500 font-bold tracking-widest mt-1 uppercase">均次分钟</div>
             </div>
         </div>
@@ -106,33 +106,33 @@
             <div class="glass-panel p-5 rounded-3xl border-t border-white/40 dark:border-white/5 shadow-sm"><h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-clapperboard text-fuchsia-500 mr-1.5 text-lg"></i> 播放软件偏好</h4><div class="relative h-32 w-full"><canvas id="profileClientChart"></canvas></div></div>
         </div>
 
-        <div class="glass-panel p-5 rounded-3xl mt-5 mb-4 border-t border-white/40 dark:border-white/5 shadow-sm">
+        <div class="glass-panel p-5 rounded-3xl mt-5 border-t border-white/40 dark:border-white/5 shadow-sm">
             <h4 class="font-black text-sm text-slate-800 dark:text-white tracking-widest uppercase mb-4"><i class="fa-solid fa-shoe-prints text-gray-400 mr-1.5 text-lg"></i> 最近播放足迹</h4>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <template x-for="(log, i) in (userStats && userStats.logs ? userStats.logs : []).slice(0, 14)" :key="'log-'+i">
-                    <div class="flex justify-between items-center bg-white/50 dark:bg-white/5 p-2.5 rounded-2xl border border-slate-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-colors group cursor-pointer" @click="openShowcaseModal(log.ItemId, {Name: log.ItemName || log.Name || '未知内容'})">
+                <template x-for="log in (userStats?.logs || []).slice(0, 14)" :key="log.DateCreated || log.ItemId">
+                    <div class="flex justify-between items-center bg-white/50 dark:bg-white/5 p-2.5 rounded-2xl border border-slate-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/10 transition-colors group cursor-pointer" @click="openShowcaseModal(log.ItemId, {Name: log.ItemName || log.Name})">
                         
                         <img :src="`/api/proxy/smart_image?item_id=${log.ItemId}&type=Primary`" 
                              class="w-10 h-14 rounded-lg object-cover bg-slate-200 dark:bg-[#111] shrink-0 mr-3 shadow-sm" 
-                             @error="window.fallbackPoster($el, log.ItemName || log.Name || '热门大片')">
+                             @error="window.fallbackPoster($el, log.ItemName || log.Name)">
                         
                         <div class="min-w-0 flex-1">
-                            <div class="font-bold text-sm text-slate-800 dark:text-zinc-200 truncate group-hover:text-brand-500 transition-colors" x-text="log.ItemName || log.Name || '未知内容'"></div>
+                            <div class="font-bold text-sm text-slate-800 dark:text-zinc-200 truncate group-hover:text-brand-500 transition-colors" x-text="log.ItemName || log.Name"></div>
                             <div class="text-[10px] text-slate-500 mt-0.5 flex gap-2 items-center">
-                                <span x-text="log.DateCreated ? String(log.DateCreated).substring(5, 16).replace('T', ' ') : ''"></span>
-                                <span class="bg-slate-200 dark:bg-black/50 text-slate-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-bold" x-text="log.Client || log.Device || '未知'"></span>
+                                <span x-text="(log.DateCreated || '').substring(5, 16).replace('T', ' ')"></span>
+                                <span class="bg-slate-200 dark:bg-black/50 text-slate-600 dark:text-zinc-300 px-1.5 py-0.5 rounded font-bold" x-text="log.Client || log.Device"></span>
                             </div>
                         </div>
                         <div class="flex items-center gap-2 shrink-0 ml-2">
-                            <div class="text-[10px] font-black text-brand-500 bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded-md border border-brand-100 dark:border-brand-500/20" x-text="(Math.round((log.PlayDuration || 0)/60)) + 'm'"></div>
-                            <button @click.stop="openFeedbackModal(log.ItemName || log.Name || '未知内容', log.smart_poster)" class="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500 dark:hover:text-white transition-colors flex items-center justify-center border border-rose-100 dark:border-rose-500/20 opacity-0 group-hover:opacity-100 sm:opacity-100" title="资源有问题？点此报错">
+                            <div class="text-[10px] font-black text-brand-500 bg-brand-50 dark:bg-brand-500/10 px-2 py-1 rounded-md border border-brand-100 dark:border-brand-500/20" x-text="Math.round(log.PlayDuration/60) + 'm'"></div>
+                            <button @click.stop="openFeedbackModal(log.ItemName || log.Name, log.smart_poster)" class="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500 dark:hover:text-white transition-colors flex items-center justify-center border border-rose-100 dark:border-rose-500/20 opacity-0 group-hover:opacity-100 sm:opacity-100" title="资源有问题？点此报错">
                                 <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
                             </button>
                         </div>
                     </div>
                 </template>
             </div>
-            <div x-show="!(userStats && userStats.logs && userStats.logs.length > 0)" class="text-xs font-bold text-slate-400 py-4 text-center bg-slate-100/50 dark:bg-white/5 rounded-xl">暂无播放记录</div>
+            <div x-show="!userStats?.logs || userStats.logs.length === 0" class="text-xs font-bold text-slate-400 py-4 text-center bg-slate-100/50 dark:bg-white/5 rounded-xl">暂无播放记录</div>
         </div>
     </div>
 </div>

@@ -1,4 +1,5 @@
-<div x-show="currentTab === 'request'" x-cloak class="w-full pb-6 overflow-x-hidden">
+<style>body { overflow-x: hidden; }</style>
+<div class="w-full pb-6">
     <div class="text-center py-6 space-y-3 mb-8">
         <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white">星愿补给站</h2>
         <p class="text-slate-500 dark:text-zinc-400 text-sm">搜索全网影视库，点击一键向服主许愿</p>
@@ -14,7 +15,7 @@
         </form>
     </div>
 
-    <div x-show="searchResults.length === 0 && !isSearching && recommendResults.length > 0" class="mt-4 mb-6 transition-opacity relative z-0" x-cloak>
+    <div x-show="searchResults.length === 0 && !isSearching && recommendResults.length > 0" class="mt-4 pb-4 relative z-0" x-cloak>
         <div class="text-center mb-6">
             <h3 class="text-[11px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-[0.4em]">
                 Trending Now 全球热播趋势
@@ -43,3 +44,4 @@
 
         </div>
     </div>
+</div>
