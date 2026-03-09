@@ -190,9 +190,10 @@ input, textarea { -webkit-user-select: auto; user-select: auto; }
 /* 3. 领奖台排版 (重点修复：高度与对齐) */
 .my-podium-container { 
     display: flex; justify-content: center; align-items: flex-end; 
-    gap: 8px; padding: 30px 20px 40px; position: relative; z-index: 5; height: 240px; 
-}
-.my-podium-item { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+    gap: 8px; padding: 30px 20px 40px; position: relative; z-index: 5; 
+    height: 260px; /* 原来是 240px，拉高一点腾出空间 */
+    margin-top: 25px; /* 增加顶部间距，强行往下推，远离上方卡片 */
+}.my-podium-item { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
 .my-podium-cover { 
     width: 100%; border-radius: 10px; aspect-ratio: 2/3; object-cover: cover; 
     box-shadow: 0 10px 20px rgba(0,0,0,0.3); border: 2px solid rgba(255,255,255,0.1); 

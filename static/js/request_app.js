@@ -204,6 +204,46 @@ document.addEventListener('alpine:init', () => {
                 else setTimeout(() => this.renderCharts(), 150);
             }
         },
+        // ==========================
+        // 弹窗与视图切换 (修复缺失的函数)
+        // ==========================
+        async openShowcaseModal(itemId, fallbackItem = null) {
+            // 兼容不同列表的 ID 字段
+            const finalId = itemId || (fallbackItem ? fallbackItem.ItemId || fallbackItem.Id : '');
+            this.showcaseModal.data = fallbackItem || { Name: '加载中...' };
+            this.showcaseModal.open = true;
+            this.showcaseModal.isLoading = true;
+            document.body.style.overflow = 'hidden';
+            try {
+                // 修复 API 路径错误：改用 stats 路由
+                const res = await fetch(`/api/stats/item_info?item_id=${finalId}`);
+                if(res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        this.showcaseModal.data = data.data;
+                    }
+                }
+            } catch(e) { console.error("加载详情失败:", e); }
+            finally { this.showcaseModal.isLoading = false; }
+        },
+
+        closeShowcaseModal() {
+            this.showcaseModal.open = false;
+            document.body.style.overflow = '';
+        },
+
+        openQueueModal(tab) {
+            this.queueModal.activeTab = tab;
+            this.queueModal.open = true;
+            document.body.style.overflow = 'hidden';
+            if(tab === 'request') this.loadQueue();
+            else this.loadMyFeedback();
+        },
+
+        closeQueueModal() {
+            this.queueModal.open = false;
+            document.body.style.overflow = '';
+        },
 
         // --- 海报工作室核心 ---
         async openMyPosterStudio() {
@@ -426,14 +466,30 @@ document.addEventListener('alpine:init', () => {
         async submitRequest() {
             if (this.activeItem.media_type === 'movie' && this.activeItem.local_status === 2) return;
             this.isSubmitting = true;
-            const payload = { tmdb_id: this.activeItem.tmdb_id, media_type: this.activeItem.media_type, title: this.activeItem.title, year: this.activeItem.year, poster_path: this.activeItem.poster_path, overview: this.activeItem.overview, seasons: this.activeItem.media_type === 'tv' ? this.selectedSeasons.map(Number) : [0] };
+            const payload = { 
+                tmdb_id: this.activeItem.tmdb_id, media_type: this.activeItem.media_type, 
+                title: this.activeItem.title, year: this.activeItem.year, 
+                poster_path: this.activeItem.poster_path, overview: this.activeItem.overview, 
+                seasons: this.activeItem.media_type === 'tv' ? this.selectedSeasons.map(Number) : [0] 
+            };
             try {
-                const res = await fetch('/api/requests/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                const data = await res.json();
-                if (data.status === 'success') { this.showToast('✅ ' + data.message); this.closeModal(); this.openQueueModal('request'); } else { this.showToast('❌ ' + data.message, 'error'); }
-            } catch (e) { this.showToast('提交失败，请重试', 'error'); } finally { this.isSubmitting = false; }
+                const res = await fetch('/api/requests/submit', { 
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(payload) 
+                });
+                
+                // 高容错解析：防止非标准 JSON 导致前端崩溃
+                const text = await res.text();
+                let data = {};
+                try { data = JSON.parse(text); } catch(e) { data = { message: text }; }
+                
+                if (res.ok && (data.status === 'success' || !data.detail)) { 
+                    this.showToast('✅ ' + (data.message || '心愿已发送给服主！')); 
+                    this.closeModal(); 
+                    this.openQueueModal('request'); 
+                } else { 
+                    this.showToast('❌ ' + (data.message || data.detail || '提交异常'), 'error'); 
+                }
+            } catch (e) { this.showToast('网络请求断开', 'error'); } 
+            finally { this.isSubmitting = false; }
         },
-        async loadQueue() { try { const res = await fetch('/api/requests/my'); const data = await res.json(); if (data.status === 'success') this.myQueue = data.data; } catch (e) {} },
-        async loadMyFeedback() { try { const res = await fetch('/api/requests/feedback/my'); const data = await res.json(); if (data.status === 'success') this.myFeedbacks = data.data; } catch (e) {} }
-    }));
-});
