@@ -58,8 +58,8 @@
         --theme-card: rgba(255,255,255,0.08); 
         --theme-text: white; 
         --theme-highlight: #eab308;
-        --theme-pill-bg: rgba(255,255,255,0.15); /* 高亮字块背景色 */
-        --theme-pill-text: white; /* 高亮字块文字色 */
+        --theme-pill-bg: rgba(255,255,255,0.15); 
+        --theme-pill-text: white; 
     }
     
     .poster-canvas { 
@@ -71,9 +71,8 @@
         transition: background 0.3s; transform-origin: top center; 
     }
     
-    /* 去掉了 filter: blur，改由 JS 物理渲染画布 */
     #poster-bg-img { position: absolute; inset: 0; z-index: 0; background-size: cover; background-position: center; transform: scale(1.2); opacity: 0; transition: opacity 0.5s; height: 100%; }
-    #poster-bg-gradient { position: absolute; inset: 0; z-index: 1; background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 100%); height: 100%; }
+    #poster-bg-gradient { position: absolute; inset: 0; z-index: 1; background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 100%); height: 100%; transition: background 0.3s; }
     
     .p-content { position: relative; z-index: 10; padding: 40px 30px; display: block; }
     .p-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
@@ -88,16 +87,16 @@
         z-index: 20; position: relative;
     }
     
-    .user-info h1 { font-size: 24px; font-weight: 900; margin: 0; padding: 4px 0; color: var(--theme-text); }
-    .user-info p { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; margin: 0; padding-bottom: 2px; color: var(--theme-text); }
+    .user-info h1 { font-size: 24px; font-weight: 900; margin: 0; padding: 4px 0; color: var(--theme-text); transition: color 0.3s;}
+    .user-info p { font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; margin: 0; padding-bottom: 2px; color: var(--theme-text); transition: color 0.3s;}
     
-    .server-pill { background: var(--theme-card); padding: 4px 10px; border-radius: 20px; font-size: 10px; border: 1px solid rgba(255,255,255,0.1); text-align: center; color: var(--theme-text); }
+    .server-pill { background: var(--theme-card); padding: 4px 10px; border-radius: 20px; font-size: 10px; border: 1px solid rgba(255,255,255,0.1); text-align: center; color: var(--theme-text); transition: color 0.3s, background 0.3s;}
     .server-pill span { display: block; font-weight: 900; font-size: 12px; color: #4ade80; padding-bottom: 2px; }
     
     .stats-row { display: flex; gap: 10px; margin-bottom: 25px; }
-    .stat-card { flex: 1; background: var(--theme-card); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center; backdrop-filter: blur(10px); }
-    .stat-val { font-size: 28px; font-weight: 900; line-height: 1; margin-bottom: 4px; padding-bottom: 4px; color: var(--theme-text); }
-    .stat-label { font-size: 9px; opacity: 0.6; text-transform: uppercase; font-weight: bold; color: var(--theme-text); }
+    .stat-card { flex: 1; background: var(--theme-card); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); text-align: center; backdrop-filter: blur(10px); transition: background 0.3s;}
+    .stat-val { font-size: 28px; font-weight: 900; line-height: 1; margin-bottom: 4px; padding-bottom: 4px; color: var(--theme-text); transition: color 0.3s;}
+    .stat-label { font-size: 9px; opacity: 0.6; text-transform: uppercase; font-weight: bold; color: var(--theme-text); transition: color 0.3s;}
     
     .podium-container { display: flex; justify-content: center; align-items: flex-end; gap: 10px; margin-bottom: 30px; margin-top: 10px; }
     .podium-item { position: relative; display: flex; flex-direction: column; align-items: center; }
@@ -109,17 +108,19 @@
     .podium-item.rank-2 .podium-cover { border-color: #94a3b8; }
     .podium-item.rank-3 .podium-cover { border-color: #b45309; }
     
-    .medal { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: white; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    /* 🔥 修复了皇冠截图中偏移的问题，严格控制 line-height 和 flex 对齐 */
+    .medal { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: white; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.3); line-height: 1; }
     .medal.rank-1 { background: linear-gradient(135deg, #fcd34d, #b45309); width: 32px; height: 32px; top: -16px; font-size: 14px; }
+    .medal i { display: block; margin-top: 1px; } /* 微调皇冠居中 */
     .medal.rank-2 { background: linear-gradient(135deg, #e2e8f0, #64748b); }
     .medal.rank-3 { background: linear-gradient(135deg, #fdba74, #9a3412); }
     
-    .podium-info { text-align: center; margin-top: 8px; width: 100%; color: var(--theme-text); }
+    .podium-info { text-align: center; margin-top: 8px; width: 100%; color: var(--theme-text); transition: color 0.3s;}
     .podium-title { font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; padding-bottom: 4px; }
     .podium-meta { font-size: 9px; opacity: 0.7; }
     
     .rank-list { display: flex; flex-direction: column; gap: 8px; }
-    .rank-row { display: flex; align-items: center; padding: 10px 10px; background: var(--theme-card); border-radius: 10px; backdrop-filter: blur(5px); min-height: 50px; color: var(--theme-text); }
+    .rank-row { display: flex; align-items: center; padding: 10px 10px; background: var(--theme-card); border-radius: 10px; backdrop-filter: blur(5px); min-height: 50px; color: var(--theme-text); transition: background 0.3s, color 0.3s;}
     .rank-idx { font-size: 12px; font-weight: 900; opacity: 0.4; width: 25px; text-align: center; }
     .rank-poster-sm { width: 32px; height: 48px; border-radius: 4px; background-color: #333; background-size: cover; background-position: center; margin-right: 12px; flex-shrink: 0; position: relative; overflow: hidden; }
     .rank-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
@@ -128,14 +129,14 @@
     
     /* 情绪模块 */
     .mood-area { margin-top: 25px; display: flex; flex-direction: column; gap: 15px; }
-    .mood-card { background: linear-gradient(135deg, var(--theme-card), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; position: relative; overflow: hidden; color: var(--theme-text); }
+    .mood-card { background: linear-gradient(135deg, var(--theme-card), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; position: relative; overflow: hidden; color: var(--theme-text); transition: color 0.3s, background 0.3s;}
     .mood-icon { position: absolute; right: -10px; bottom: -15px; font-size: 60px; opacity: 0.08; transform: rotate(-15deg); }
-    .mood-title { font-size: 10px; font-weight: 900; letter-spacing: 1px; color: var(--theme-highlight); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    .mood-title { font-size: 10px; font-weight: 900; letter-spacing: 1px; color: var(--theme-highlight); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; transition: color 0.3s;}
     .mood-text { font-size: 12px; line-height: 1.6; opacity: 0.9; }
-    .mood-highlight { font-weight: bold; color: var(--theme-pill-text); background: var(--theme-pill-bg); padding: 0 4px; border-radius: 4px; }
+    .mood-highlight { font-weight: bold; color: var(--theme-pill-text); background: var(--theme-pill-bg); padding: 0 4px; border-radius: 4px; transition: color 0.3s, background 0.3s;}
     
-    .p-footer { margin-top: 30px; text-align: center; opacity: 0.4; font-size: 10px; letter-spacing: 2px; color: var(--theme-text); }
-    .empty-box { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.4; min-height: 200px; text-align: center; color: var(--theme-text); }
+    .p-footer { margin-top: 30px; text-align: center; opacity: 0.4; font-size: 10px; letter-spacing: 2px; color: var(--theme-text); transition: color 0.3s;}
+    .empty-box { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.4; min-height: 200px; text-align: center; color: var(--theme-text); transition: color 0.3s;}
     
     /* 控件样式 */
     .ctrl-label { font-size: 12px; font-weight: bold; color: #666; margin-bottom: 8px; display: block; }
@@ -196,20 +197,17 @@
         } catch(e) {}
     };
 
-    // 🔥 物理级模糊引擎：利用 Canvas 强行渲染模糊背景，解决 html2canvas 无法截取滤镜的终极绝杀！
     async function applyPhysicalBlur(base64Url) {
         return new Promise((resolve) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                canvas.width = 400; // 匹配海报宽度
-                canvas.height = 800; // 匹配海报高度估计
+                canvas.width = 400; 
+                canvas.height = 800; 
                 
-                // 物理模糊核心
                 ctx.filter = 'blur(40px) brightness(0.4)';
                 
-                // 绘制背景
                 const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
                 const x = (canvas.width / 2) - (img.width / 2) * scale;
                 const y = (canvas.height / 2) - (img.height / 2) * scale;
@@ -405,29 +403,32 @@
         return '历史全量 观影报告';
     }
 
+    // 🔥 修复：同步设定全局 --theme-text，并强行卸载封面背景
     function setTheme(bg, text, hl) {
         const canvas = document.querySelector('.poster-canvas');
         canvas.style.background = bg;
         canvas.style.color = text;
         
         document.documentElement.style.setProperty('--theme-highlight', hl);
+        // 🔥 核心修复点1：同步更改 CSS 变量文本颜色，拯救纯白主题
+        document.documentElement.style.setProperty('--theme-text', text); 
+        
+        // 🔥 核心修复点2：点击任意主题颜色，强行踢掉“封面背景”逻辑
+        isCoverBgEnabled = false;
+        document.getElementById('poster-bg-img').style.opacity = '0';
         
         if(text === '#333') {
             // 纯白主题下，高亮块背景变深，文字变白
             document.documentElement.style.setProperty('--theme-pill-bg', '#333');
             document.documentElement.style.setProperty('--theme-pill-text', 'white');
             document.documentElement.style.setProperty('--theme-card', 'rgba(0,0,0,0.05)');
-            if(!isCoverBgEnabled) document.getElementById('poster-bg-gradient').style.background = 'transparent';
+            document.getElementById('poster-bg-gradient').style.background = 'transparent';
         } else {
             // 深色主题下，高亮块背景变半透白，文字变白
             document.documentElement.style.setProperty('--theme-pill-bg', 'rgba(255,255,255,0.15)');
             document.documentElement.style.setProperty('--theme-pill-text', 'white');
             document.documentElement.style.setProperty('--theme-card', 'rgba(255,255,255,0.08)');
-            if(!isCoverBgEnabled) document.getElementById('poster-bg-gradient').style.background = 'linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.5))';
-        }
-        
-        if(!isCoverBgEnabled) {
-            document.getElementById('poster-bg-img').style.opacity = '0';
+            document.getElementById('poster-bg-gradient').style.background = 'linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.5))';
         }
     }
 
@@ -450,6 +451,7 @@
             document.documentElement.style.setProperty('--theme-card', 'rgba(255,255,255,0.08)');
             document.documentElement.style.setProperty('--theme-pill-bg', 'rgba(255,255,255,0.15)');
             document.documentElement.style.setProperty('--theme-pill-text', 'white');
+            document.documentElement.style.setProperty('--theme-text', 'white'); // 开启背景必为白字
             document.querySelector('.poster-canvas').style.color = 'white';
             document.getElementById('poster-bg-gradient').style.background = 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.8) 100%)';
         }
@@ -610,9 +612,7 @@
                         if(b64) {
                             coverBg.style.backgroundImage = `url('${b64}')`;
                             if(rank === 1) {
-                                // 🔥 在后台悄悄生成物理模糊版本的图，专供 html2canvas 截图使用
                                 top1PhysicalBlurredBase64 = await applyPhysicalBlur(b64);
-                                // 同时为了预览，我们先把背景设置为正常图(因为CSS里我们移除了blur，所以我们直接用物理模糊图做背景)
                                 document.getElementById('poster-bg-img').style.backgroundImage = `url('${top1PhysicalBlurredBase64}')`;
                             }
                         }
@@ -661,13 +661,19 @@
 
         const wrapper = document.getElementById('scale-wrapper');
         const oldT = wrapper.style.transform;
+        
+        // 🔥 终极绝杀：强行干预渲染环境，滚回顶部，取消缩放，避免 html2canvas 任何错位
+        window.scrollTo(0, 0);
         wrapper.style.transform = 'none';
-        await new Promise(r => setTimeout(r, 200)); 
+        await new Promise(r => setTimeout(r, 300)); 
         
         try {
-            // 🔥 此时背景图已经是经过 Canvas 处理过的物理模糊图，html2canvas 截出来绝对不会露馅！
             const canvas = await html2canvas(document.getElementById('capture-target'), { 
-                scale: 2, useCORS: true, backgroundColor: null 
+                scale: 2, 
+                useCORS: true, 
+                backgroundColor: null,
+                scrollY: 0,
+                scrollX: 0
             });
             const link = document.createElement('a');
             link.download = `EmbyPulse_${currentUserName}_${currentPeriod}.png`;
