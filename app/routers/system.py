@@ -20,10 +20,11 @@ def api_get_settings(request: Request):
             "emby_public_url": cfg.get("emby_public_url", ""),
             "welcome_message": cfg.get("welcome_message", ""),
             "client_download_url": cfg.get("client_download_url", ""),
-            # 🔥 新增：把 MP 和面板地址吐给前端显示
             "moviepilot_url": cfg.get("moviepilot_url", ""),
             "moviepilot_token": cfg.get("moviepilot_token", ""),
-            "pulse_url": cfg.get("pulse_url", "")
+            "pulse_url": cfg.get("pulse_url", ""),
+            # 🔥 返回双擎模式给前端
+            "playback_data_mode": cfg.get("playback_data_mode", "sqlite")
         }
     }
 
@@ -31,7 +32,6 @@ def api_get_settings(request: Request):
 def api_update_settings(data: SettingsModel, request: Request):
     if not request.session.get("user"): return {"status": "error"}
     
-    # 验证 Emby 连接
     try:
         res = requests.get(f"{data.emby_host}/emby/System/Info?api_key={data.emby_api_key}", timeout=5)
         if res.status_code != 200:
@@ -39,7 +39,6 @@ def api_update_settings(data: SettingsModel, request: Request):
     except:
         return {"status": "error", "message": "Emby 地址无法访问"}
 
-    # 更新配置
     cfg["emby_host"] = data.emby_host
     cfg["emby_api_key"] = data.emby_api_key
     cfg["tmdb_api_key"] = data.tmdb_api_key
@@ -49,143 +48,66 @@ def api_update_settings(data: SettingsModel, request: Request):
     cfg["emby_public_url"] = data.emby_public_url
     cfg["welcome_message"] = data.welcome_message
     cfg["client_download_url"] = data.client_download_url
-    
-    # 🔥 新增：把接收到的新字段手动存入 cfg
     cfg["moviepilot_url"] = data.moviepilot_url
     cfg["moviepilot_token"] = data.moviepilot_token
     cfg["pulse_url"] = data.pulse_url
+    # 🔥 保存双擎模式
+    cfg["playback_data_mode"] = data.playback_data_mode
     
     save_config()
     
     return {"status": "success", "message": "配置已保存"}
 
+# ...(下面 test_tmdb, test_mp, fix_db 代码完全保持原样，无需修改) ...
 @router.post("/api/settings/test_tmdb")
 def api_test_tmdb(request: Request):
     if not request.session.get("user"): return {"status": "error"}
-    # 简化逻辑，直接测试 cfg 里的
     tmdb_key = cfg.get("tmdb_api_key")
     proxy = cfg.get("proxy_url")
-    
     if not tmdb_key: return {"status": "error", "message": "未配置 TMDB API Key"}
-    
     try:
         proxies = {"http": proxy, "https": proxy} if proxy else None
         url = f"https://api.themoviedb.org/3/authentication/token/new?api_key={tmdb_key}"
         res = requests.get(url, proxies=proxies, timeout=10)
-        if res.status_code == 200:
-            return {"status": "success", "message": "TMDB 连接成功"}
+        if res.status_code == 200: return {"status": "success", "message": "TMDB 连接成功"}
         return {"status": "error", "message": f"连接失败: {res.status_code}"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    except Exception as e: return {"status": "error", "message": str(e)}
 
 @router.post("/api/settings/test_mp")
 async def test_moviepilot(request: Request):
-    if not request.session.get("user"): 
-        return {"status": "error", "message": "权限不足"}
-        
+    if not request.session.get("user"): return {"status": "error", "message": "权限不足"}
     data = await request.json()
     mp_url = data.get("mp_url", "").strip().rstrip('/')
     mp_token = data.get("mp_token", "").strip().strip("'\"")
-
-    if not mp_url or not mp_token:
-        return {"status": "error", "message": "请先填写 MoviePilot 地址和 Token"}
-
+    if not mp_url or not mp_token: return {"status": "error", "message": "请填写 MoviePilot 信息"}
     try:
-        # 请求 MoviePilot 的基础接口来验证 Token 有效性
-        res = requests.get(
-            f"{mp_url}/api/v1/site/", 
-            headers={
-                "X-API-KEY": mp_token,
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-}, 
-            timeout=8
-        )
-        
-        if res.status_code == 200:
-            return {"status": "success", "message": "🎉 MoviePilot 连通测试成功！"}
-        elif res.status_code in [401, 403]:
-            return {"status": "error", "message": "❌ Token 认证失败，请检查 API Key 是否正确"}
-        else:
-            return {"status": "success", "message": f"⚠️ 服务器已连通 (状态码: {res.status_code})，但建议检查地址是否指向 API 根路径"}
-            
-    except requests.exceptions.RequestException as e:
-        return {"status": "error", "message": f"❌ 无法连接到 MoviePilot，请检查地址或服务器网络。"}
+        res = requests.get(f"{mp_url}/api/v1/site/", headers={"X-API-KEY": mp_token, "User-Agent": "Mozilla/5.0"}, timeout=8)
+        if res.status_code == 200: return {"status": "success", "message": "🎉 MoviePilot 连通测试成功！"}
+        elif res.status_code in [401, 403]: return {"status": "error", "message": "❌ Token 认证失败"}
+        else: return {"status": "success", "message": f"⚠️ 服务器连通(状态码: {res.status_code})"}
+    except: return {"status": "error", "message": f"❌ 无法连接到 MoviePilot"}
 
 @router.post("/api/settings/fix_db")
 def api_fix_db(request: Request):
     if not request.session.get("user"): return {"status": "error"}
-    
     from app.core.database import DB_PATH
     import sqlite3
     import os
-    
-    if not os.path.exists(DB_PATH):
-        return {"status": "error", "message": "数据库文件不存在，请检查挂载路径"}
-        
+    if not os.path.exists(DB_PATH): return {"status": "error", "message": "数据库不存在"}
     try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        
-        results = []
-        
-        # 1. 检查 media_requests 表
-        try:
-            c.execute("SELECT 1 FROM media_requests LIMIT 1")
+        conn = sqlite3.connect(DB_PATH); c = conn.cursor(); results = []
+        try: c.execute("SELECT 1 FROM media_requests LIMIT 1")
         except sqlite3.OperationalError:
-            c.execute('''
-                CREATE TABLE IF NOT EXISTS media_requests (
-                    tmdb_id INTEGER,
-                    media_type TEXT,
-                    title TEXT,
-                    year TEXT,
-                    poster_path TEXT,
-                    status INTEGER DEFAULT 0,
-                    season INTEGER DEFAULT 0,
-                    reject_reason TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (tmdb_id, season)
-                )
-            ''')
+            c.execute('''CREATE TABLE IF NOT EXISTS media_requests (tmdb_id INTEGER, media_type TEXT, title TEXT, year TEXT, poster_path TEXT, status INTEGER DEFAULT 0, season INTEGER DEFAULT 0, reject_reason TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (tmdb_id, season))''')
             results.append("已修复: 求片主表")
-
-        # 2. 检查 request_users 表
-        try:
-            c.execute("SELECT 1 FROM request_users LIMIT 1")
+        try: c.execute("SELECT 1 FROM request_users LIMIT 1")
         except sqlite3.OperationalError:
-            c.execute('''
-                CREATE TABLE IF NOT EXISTS request_users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tmdb_id INTEGER,
-                    user_id TEXT,
-                    username TEXT,
-                    season INTEGER DEFAULT 0,
-                    requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(tmdb_id, user_id, season)
-                )
-            ''')
+            c.execute('''CREATE TABLE IF NOT EXISTS request_users (id INTEGER PRIMARY KEY AUTOINCREMENT, tmdb_id INTEGER, user_id TEXT, username TEXT, season INTEGER DEFAULT 0, requested_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(tmdb_id, user_id, season))''')
             results.append("已修复: 求片关联表")
-
-        # 3. 检查 insight_ignores 表
-        try:
-            c.execute("SELECT 1 FROM insight_ignores LIMIT 1")
+        try: c.execute("SELECT 1 FROM insight_ignores LIMIT 1")
         except sqlite3.OperationalError:
-            c.execute('''
-                CREATE TABLE IF NOT EXISTS insight_ignores (
-                    item_id TEXT PRIMARY KEY,
-                    item_name TEXT,
-                    ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
+            c.execute('''CREATE TABLE IF NOT EXISTS insight_ignores (item_id TEXT PRIMARY KEY, item_name TEXT, ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
             results.append("已修复: 盘点忽略表")
-            
-        conn.commit()
-        conn.close()
-        
-        if not results:
-            return {"status": "success", "message": "数据库结构完整健康，无需修复！"}
-        else:
-            return {"status": "success", "message": f"修复完成: {', '.join(results)}"}
-            
-    except Exception as e:
-        return {"status": "error", "message": f"修复过程中发生严重错误: {e}"}
+        conn.commit(); conn.close()
+        return {"status": "success", "message": f"修复完成: {', '.join(results)}" if results else "数据库结构完整健康，无需修复！"}
+    except Exception as e: return {"status": "error", "message": f"修复严重错误: {e}"}

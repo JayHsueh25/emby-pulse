@@ -1,5 +1,7 @@
 import sqlite3
 import os
+import requests
+import json
 from app.core.config import cfg, DB_PATH
 
 def init_db():
@@ -29,7 +31,7 @@ def init_db():
             )
         ''')
         
-        # 1. 只初始化机器人专属配置表 (不碰插件的表)
+        # 1. 机器人专属配置表
         c.execute('''CREATE TABLE IF NOT EXISTS users_meta (
                         user_id TEXT PRIMARY KEY,
                         expire_date TEXT,
@@ -37,7 +39,7 @@ def init_db():
                         created_at TEXT
                     )''')
         
-        # 2. 邀请码表 (合并了双版本的字段)
+        # 2. 邀请码表
         c.execute('''CREATE TABLE IF NOT EXISTS invitations (
                         code TEXT PRIMARY KEY,
                         days INTEGER,        -- 有效期天数 (-1为永久)
@@ -50,24 +52,21 @@ def init_db():
                         template_user_id TEXT -- 绑定的权限模板用户
                     )''')
         
-        # 兼容老版本数据库：尝试追加列 (如果列已存在会抛异常，忽略即可)
-        try:
-            c.execute("ALTER TABLE invitations ADD COLUMN template_user_id TEXT")
-        except:
-            pass
+        try: c.execute("ALTER TABLE invitations ADD COLUMN template_user_id TEXT")
+        except: pass
 
         # 3. 追剧日历本地缓存表
         c.execute('''CREATE TABLE IF NOT EXISTS tv_calendar_cache (
-                        id TEXT PRIMARY KEY,       -- 组合主键: seriesId_season_episode
-                        series_id TEXT,            -- Emby 剧集 ID，用于 Webhook 联动
+                        id TEXT PRIMARY KEY,
+                        series_id TEXT,
                         season INTEGER,
                         episode INTEGER,
-                        air_date TEXT,             -- 播出日期 (YYYY-MM-DD)
-                        status TEXT,               -- 红绿灯状态: ready/missing/upcoming/today
-                        data_json TEXT             -- 完整数据的 JSON 文本
+                        air_date TEXT,
+                        status TEXT,
+                        data_json TEXT
                     )''')
 
-        # 4. 🔥 [已修复] 求片资源主表 (同步最新多季架构，引入 season 和 复合主键)
+        # 4. 求片资源主表
         c.execute('''
             CREATE TABLE IF NOT EXISTS media_requests (
                 tmdb_id INTEGER,
@@ -84,7 +83,7 @@ def init_db():
             )
         ''')
 
-        # 5. 🔥 [已修复] 求片用户关联表 (+1 机制，同步引入 season 复合唯一约束)
+        # 5. 求片用户关联表
         c.execute('''
             CREATE TABLE IF NOT EXISTS request_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,7 +96,7 @@ def init_db():
             )
         ''')
         
-        # 6. 🔥 新增：质量盘点忽略名单 (insight_ignores)
+        # 6. 质量盘点忽略名单
         c.execute('''
             CREATE TABLE IF NOT EXISTS insight_ignores (
                 item_id TEXT PRIMARY KEY,
@@ -105,7 +104,7 @@ def init_db():
                 ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        # 7. 🔥 新增：缺集管理记录表 (gap_records)
+        # 7. 缺集管理记录表
         c.execute('''
             CREATE TABLE IF NOT EXISTS gap_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,7 +112,7 @@ def init_db():
                 series_name TEXT,
                 season_number INTEGER,
                 episode_number INTEGER,
-                status INTEGER DEFAULT 0, -- 1: 永久忽略(屏蔽), 2: MP处理中(蓝灯)
+                status INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(series_id, season_number, episode_number)
             )
@@ -125,7 +124,55 @@ def init_db():
     except Exception as e: 
         print(f"❌ DB Init Error: {e}")
 
+
+# --- 魔法工具：将带 ? 的 SQL 转换为纯字符串 ---
+def _interpolate_sql(query: str, args: tuple) -> str:
+    if not args: return query
+    parts = query.split('?')
+    if len(parts) - 1 != len(args): return query # 防止异常
+    res = parts[0]
+    for i, arg in enumerate(args):
+        if isinstance(arg, (int, float)): val = str(arg)
+        elif arg is None: val = "NULL"
+        else: val = f"'{str(arg).replace(chr(39), chr(39)+chr(39))}'" # 防注入单引号转义
+        res += val + parts[i+1]
+    return res
+
+
 def query_db(query, args=(), one=False):
+    # ==========================================
+    # 🔥 双擎路由拦截器
+    # ==========================================
+    mode = cfg.get("playback_data_mode", "sqlite")
+    is_playback_query = "PlaybackActivity" in query or "PlaybackReporting" in query
+    
+    if mode == "api" and is_playback_query:
+        # 如果是查播放数据，且开启了 API 模式 -> 强行拦截发给 Emby 插件！
+        host = cfg.get("emby_host")
+        token = cfg.get("emby_api_key")
+        if host and token:
+            full_sql = _interpolate_sql(query, args)
+            url = f"{host.rstrip('/')}/emby/user_usage_stats/submit_custom_query"
+            headers = {"X-Emby-Token": token, "Content-Type": "application/json"}
+            payload = {"CustomQueryString": full_sql}
+            
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=20)
+                if res.status_code == 200:
+                    data = res.json()
+                    # 抹平差异：API 返回的是字典列表，我们在后续业务代码中可以直接使用，完美兼容 sqlite3.Row
+                    if query.strip().upper().startswith("SELECT"):
+                        return (data[0] if data else None) if one else data
+                    return True
+                else:
+                    print(f"API 路由查询失败: HTTP {res.status_code}")
+            except Exception as e:
+                print(f"API 路由网络异常: {e}")
+        # 如果 API 失败或未配置，平滑降级回 sqlite 模式
+    
+    # ==========================================
+    # 🚂 原版 SQLite 执行器 (处理本表及降级情况)
+    # ==========================================
     if not os.path.exists(DB_PATH): return None
     try:
         conn = sqlite3.connect(DB_PATH, timeout=20.0)
@@ -148,13 +195,10 @@ def get_base_filter(user_id_filter):
     where = "WHERE 1=1"
     params = []
     
-    # 注意：插件数据库列名通常是 UserId (PascalCase)
-    # 如果您的插件版本不同，可能需要改为 user_id，但标准版是 UserId
     if user_id_filter and user_id_filter != 'all':
         where += " AND UserId = ?"
         params.append(user_id_filter)
     
-    # 隐藏用户过滤
     hidden = cfg.get("hidden_users")
     if (not user_id_filter or user_id_filter == 'all') and hidden and len(hidden) > 0:
         placeholders = ','.join(['?'] * len(hidden))

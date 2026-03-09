@@ -37,6 +37,30 @@
                         </button>
                     </div>
                 </div>
+
+                <div class="pt-4 mt-2 border-t border-gray-100 dark:border-gray-700/50">
+                    <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 uppercase tracking-wide flex items-center gap-1">
+                        统计数据获取模式 <i class="fa-solid fa-circle-info text-gray-400 cursor-help" title="若使用 Docker 挂载了 PlaybackReporting.db 请选本地直读（性能最好）；若未挂载，请选官方 API 穿透"></i>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="relative flex items-center justify-center p-3 border rounded-xl cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-gray-700/50 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/50 dark:has-[:checked]:bg-indigo-500/10 dark:border-gray-600">
+                            <input type="radio" name="playback_data_mode" value="sqlite" class="peer sr-only">
+                            <div class="text-center">
+                                <i class="fa-solid fa-hard-drive block text-lg mb-1 text-gray-400 peer-checked:text-indigo-500"></i>
+                                <span class="text-xs font-bold text-gray-700 dark:text-gray-300 mt-1 block">本地直读 (挂载)</span>
+                            </div>
+                            <i class="fa-solid fa-circle-check absolute top-2 right-2 text-indigo-500 opacity-0 peer-checked:opacity-100 transition-opacity"></i>
+                        </label>
+                        <label class="relative flex items-center justify-center p-3 border rounded-xl cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-gray-700/50 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50/50 dark:has-[:checked]:bg-emerald-500/10 dark:border-gray-600">
+                            <input type="radio" name="playback_data_mode" value="api" class="peer sr-only">
+                            <div class="text-center">
+                                <i class="fa-solid fa-cloud-arrow-down block text-lg mb-1 text-gray-400 peer-checked:text-emerald-500"></i>
+                                <span class="text-xs font-bold text-gray-700 dark:text-gray-300 mt-1 block">官方 API 穿透</span>
+                            </div>
+                            <i class="fa-solid fa-circle-check absolute top-2 right-2 text-emerald-500 opacity-0 peer-checked:opacity-100 transition-opacity"></i>
+                        </label>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -239,6 +263,11 @@ async function loadSettings() {
         document.getElementById('moviepilot_token').value = d.moviepilot_token || '';
         document.getElementById('pulse_url').value = d.pulse_url || '';
 
+        // 🔥 注入点：双擎模式开关回显
+        const mode = d.playback_data_mode || 'sqlite';
+        const radio = document.querySelector(`input[name="playback_data_mode"][value="${mode}"]`);
+        if (radio) radio.checked = true;
+
         hiddenUsers = d.hidden_users || [];
         renderHiddenUsers();
         updateWebhookPreview();
@@ -321,7 +350,9 @@ async function saveSettings() {
         client_download_url: document.getElementById('client_download_url').value,
         moviepilot_url: document.getElementById('moviepilot_url').value,
         moviepilot_token: document.getElementById('moviepilot_token').value,
-        pulse_url: document.getElementById('pulse_url').value
+        pulse_url: document.getElementById('pulse_url').value,
+        // 🔥 注入点：获取当前选中的双擎模式
+        playback_data_mode: document.querySelector('input[name="playback_data_mode"]:checked')?.value || 'sqlite'
     };
 
     const btnBtn = document.getElementById('top-save-btn');
@@ -410,7 +441,6 @@ async function testTMDB() {
     } catch(e) { showToast('测试失败', 'error'); }
 }
 
-// 🔥 数据库体检逻辑 (保留你要求的逻辑：先展示项目，检测完显示结果)
 async function runHealthCheck(btn) {
     const originalHtml = btn.innerHTML;
     btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> 体检中...';
@@ -422,7 +452,6 @@ async function runHealthCheck(btn) {
         const fixSection = document.getElementById('fix-section');
         const healthySection = document.getElementById('healthy-section');
         
-        // 初始状态
         const items = [
             { id: 'requests', name: '求片系统组件' },
             { id: 'ignores', name: '洗版隔离组件' }
@@ -435,7 +464,6 @@ async function runHealthCheck(btn) {
             </div>
         `).join('');
 
-        // 发起后端真实体检接口 (POST 请求不传 fix 逻辑其实也能作为检测)
         const checkRes = await fetch('/api/settings/fix_db', { method: 'POST' });
         const checkJson = await checkRes.json();
         
@@ -444,7 +472,6 @@ async function runHealthCheck(btn) {
         const isAnyMissing = isRequestsMissing || isIgnoresMissing;
 
         setTimeout(() => {
-            // 更新 UI 状态
             document.getElementById('check-icon-requests').outerHTML = isRequestsMissing 
                 ? '<span class="text-[10px] bg-rose-100 text-rose-600 px-2 py-0.5 rounded-md font-black">缺失</span>'
                 : '<i class="fa-solid fa-circle-check text-emerald-500"></i>';

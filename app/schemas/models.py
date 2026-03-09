@@ -18,6 +18,8 @@ class SettingsModel(BaseModel):
     moviepilot_url: Optional[str] = ""
     moviepilot_token: Optional[str] = ""
     pulse_url: Optional[str] = ""
+    # 🔥 新增：双引擎模式开关
+    playback_data_mode: Optional[str] = "sqlite"
 
 class BotSettingsModel(BaseModel):
     tg_bot_token: str
