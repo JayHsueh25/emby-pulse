@@ -30,7 +30,21 @@ document.addEventListener('alpine:init', () => {
         async logout() { try { await fetch('/api/requests/logout', { method: 'POST' }); this.isLoggedIn = false; } catch (e) {} },
 
         async loadServerData() { 
-            try { const [dash, hub, lat, topM, topS] = await Promise.all([ fetch('/api/stats/dashboard?user_id=all').then(r => r.json()), fetch('/api/requests/hub_data').then(r => r.json()), fetch('/api/stats/latest?limit=15').then(r => r.json()), fetch('/api/stats/top_movies?category=Movie&sort_by=count').then(r => r.json()), fetch('/api/stats/top_movies?category=Episode&sort_by=count').then(r => r.json()) ]); if (dash.status === 'success') this.serverDashboard = dash.data; if (hub.status === 'success') { this.serverTopRated = hub.data.top_rated; this.serverGenres = hub.data.genres; } if (lat.status === 'success') this.serverLatest = lat.data; if (topM.status === 'success') this.serverTopMovies = topM.data.slice(0, 10); if (topS.status === 'success') this.serverTopSeries = topS.data.slice(0, 10); } catch(e) {} 
+            try { 
+                const [dash, hub, lat, topM, topS] = await Promise.all([ 
+                    fetch('/api/stats/dashboard?user_id=all').then(r => r.json()), 
+                    fetch('/api/requests/hub_data').then(r => r.json()), 
+                    // 🔥 这里将原来的 latest 替换成了带有安检门的 safe_latest
+                    fetch('/api/requests/safe_latest?limit=15').then(r => r.json()), 
+                    fetch('/api/requests/safe_top?category=Movie').then(r => r.json()), 
+                    fetch('/api/requests/safe_top?category=Episode').then(r => r.json()) 
+                ]); 
+                if (dash.status === 'success') this.serverDashboard = dash.data; 
+                if (hub.status === 'success') { this.serverTopRated = hub.data.top_rated; this.serverGenres = hub.data.genres; } 
+                if (lat.status === 'success') this.serverLatest = lat.data; 
+                if (topM.status === 'success') this.serverTopMovies = topM.data; 
+                if (topS.status === 'success') this.serverTopSeries = topS.data; 
+            } catch(e) {} 
             this.loadRecommendations();
         },
 
