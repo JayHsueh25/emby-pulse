@@ -217,17 +217,26 @@ def get_hub_data(request: Request):
     
     top_rated = []; genres_data = []
     try:
-        # 1. 抓取高分神作 (Top Rated)
-        tr_url = f"{host}/emby/Users/{uid}/Items?IncludeItemTypes=Movie,Series&Recursive=true&SortBy=CommunityRating&SortOrder=Descending&Limit=15&Fields=CommunityRating&api_key={key}"
+        import random # 局部引入，防止漏加
+        # 1. 抓取高分神作 (Top Rated) - 扩大获取范围到 100 条作为随机池
+        tr_url = f"{host}/emby/Users/{uid}/Items?IncludeItemTypes=Movie,Series&Recursive=true&SortBy=CommunityRating&SortOrder=Descending&Limit=100&Fields=CommunityRating&api_key={key}"
         tr_res = requests.get(tr_url, timeout=5).json()
+        
+        valid_items = []
         for i in tr_res.get("Items", []):
-            if i.get("CommunityRating", 0) >= 8.5:
-                top_rated.append({
+            rating = i.get("CommunityRating", 0)
+            # 🔥 核心过滤：排除 10 分，保留 8.0 到 9.8 之间的真正神作
+            if 8.0 <= rating <= 9.8:
+                valid_items.append({
                     "Id": i.get("Id"), "Name": i.get("Name"), "Type": i.get("Type"),
-                    "CommunityRating": i.get("CommunityRating")
+                    "CommunityRating": rating
                 })
                 
-        # 2. 抓取流派分布 (取前200部最新影视剧的类型，反映近期建库趋势，速度快)
+        # 打乱顺序，随机抽取 10 部（每次刷新都不一样）
+        random.shuffle(valid_items)
+        top_rated = valid_items[:10]
+                
+        # 2. 抓取流派分布 (取前200部最新影视剧的类型，反映近期建库趋势)
         g_url = f"{host}/emby/Users/{uid}/Items?IncludeItemTypes=Movie,Series&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Limit=200&Fields=Genres&api_key={key}"
         g_res = requests.get(g_url, timeout=5).json()
         genre_counts = {}
@@ -242,9 +251,11 @@ def get_hub_data(request: Request):
             sorted_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:6] # 取前6个流派
             for k, v in sorted_genres:
                 genres_data.append({"name": k, "count": v, "pct": round(v / total_items * 100)})
-    except: pass
+    except Exception as e: 
+        print(f"获取枢纽数据失败: {e}")
+        pass
         
-    return {"status": "success", "data": {"top_rated": top_rated[:10], "genres": genres_data}}
+    return {"status": "success", "data": {"top_rated": top_rated, "genres": genres_data}}
 
 @router.get("/api/requests/search")
 def search_tmdb(query: str, request: Request):
