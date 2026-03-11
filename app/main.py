@@ -77,7 +77,11 @@ def start_10308_server():
     import uvicorn
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    config = uvicorn.Config(app=user_portal_app, log_level="critical")
+    
+    # 🔥 核心修改：改为 log_level="error"
+    # 效果：平时安静不刷屏，一旦有 Bug 或 500 错误，立刻输出详细报错日志！
+    config = uvicorn.Config(app=user_portal_app, log_level="error")
+    
     server = uvicorn.Server(config)
     server.install_signal_handlers = lambda: None
     try:
