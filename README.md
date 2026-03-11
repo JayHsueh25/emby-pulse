@@ -10,7 +10,7 @@
   </a>
   <br/>
   <p align="center">
-    <a href="docs/index.md"><img src="https://img.shields.io/badge/Wiki%20文档-5E7380?style=for-the-badge&labelColor=3F5561" alt="Wiki 文档" /></a>
+    <a href="https://github.com/zeyu8023/emby-pulse/wiki"><img src="https://img.shields.io/badge/Wiki%20文档-5E7380?style=for-the-badge&labelColor=3F5561" alt="Wiki 文档" /></a>
     <a href="#-亮点速览"><img src="https://img.shields.io/badge/亮点速览-5B6B8C?style=for-the-badge&labelColor=3E4C6D" alt="亮点速览" /></a>
     <a href="#-界面预览"><img src="https://img.shields.io/badge/界面预览-587D7E?style=for-the-badge&labelColor=3E5C5D" alt="界面预览" /></a>
     <a href="#-核心功能特性全览"><img src="https://img.shields.io/badge/核心功能-6B7280?style=for-the-badge&labelColor=4B5563" alt="核心功能" /></a>

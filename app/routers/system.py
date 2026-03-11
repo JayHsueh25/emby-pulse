@@ -25,6 +25,8 @@ def api_get_settings(request: Request):
             "moviepilot_token": cfg.get("moviepilot_token", ""),
             "pulse_url": cfg.get("pulse_url", ""),
             "playback_data_mode": cfg.get("playback_data_mode", "sqlite")
+            "notify_user_login": cfg.get("notify_user_login", False),    # 🔥 补上这行
+            "notify_item_deleted": cfg.get("notify_item_deleted", False) # 🔥 补上这行
         }
     }
 
@@ -58,7 +60,8 @@ def api_update_settings(data: SettingsModel, request: Request):
     cfg["moviepilot_token"] = data.moviepilot_token
     cfg["pulse_url"] = data.pulse_url
     cfg["playback_data_mode"] = getattr(data, "playback_data_mode", "sqlite")
-    
+    cfg["notify_user_login"] = getattr(data, "notify_user_login", False)     # 🔥 补上这行
+    cfg["notify_item_deleted"] = getattr(data, "notify_item_deleted", False) # 🔥 补上这行
     save_config()
     
     return {"status": "success", "message": "配置已保存"}

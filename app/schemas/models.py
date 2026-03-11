@@ -21,6 +21,8 @@ class SettingsModel(BaseModel):
     # 🔥 新增：双引擎模式开关
     playback_data_mode: Optional[str] = "sqlite"
     server_type: str = "emby"
+    notify_user_login: bool = False     # 🔥 补上这行
+    notify_item_deleted: bool = False   # 🔥 补上这行
 
 class BotSettingsModel(BaseModel):
     tg_bot_token: str

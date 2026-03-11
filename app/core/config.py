@@ -49,6 +49,9 @@ DEFAULT_CONFIG = {
     "enable_bot": False,  
     "enable_notify": False,
     "enable_library_notify": False,
+    # 🔥 新增：细颗粒度事件开关
+    "notify_user_login": False,   
+    "notify_item_deleted": False, 
     "webhook_token": "embypulse",
     "calendar_cache_ttl": 86400,
     "scheduled_tasks": [],
@@ -58,7 +61,6 @@ DEFAULT_CONFIG = {
     "moviepilot_url": "",
     "moviepilot_token": "",
     "pulse_url": "",
-    # 🔥 新增：媒体服务器类型 (默认 emby，未来可选 jellyfin)
     "server_type": "emby" 
 }
 

@@ -12,27 +12,334 @@ from collections import defaultdict
 from app.core.config import cfg, REPORT_COVER_URL, FALLBACK_IMAGE_URL
 from app.core.database import query_db, get_base_filter
 from app.services.report_service import report_gen, HAS_PIL
+# 🔥 引入事件总线
+from app.core.event_bus import bus
 
 logger = logging.getLogger("uvicorn")
 
-class TelegramBot:
+# ==============================================================================
+# 🧠 第一层：潜意识核心 (System Daemon)
+# 职责：处理缺集闭环、求片核销、刮削数据收集，不受任何通知开关控制，永远在线。
+# ==============================================================================
+class SystemDaemon:
     def __init__(self):
         self.running = False
-        self.poll_thread = None
         self.schedule_thread = None 
         self.library_queue = []
         self.library_lock = threading.Lock()
         self.library_thread = None
         
-        self.offset = 0
         self.last_check_min = -1
         self.last_sync_min = -1
+        
+        # 订阅感知层的心跳
+        bus.subscribe("webhook.received", self.on_webhook_event)
+        
+    def start(self):
+        if self.running: return
+        self.running = True
+        
+        self.schedule_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
+        self.schedule_thread.start()
+        
+        self.library_thread = threading.Thread(target=self._library_notify_loop, daemon=True)
+        self.library_thread.start()
+        print("🧠 System Daemon Started (Event Subsystem Online)")
+
+    def stop(self): self.running = False
+
+    def on_webhook_event(self, event: str, data: dict):
+        """精准提取系统关注的核心事件"""
+        if "item.added" in event or "library.new" in event:
+            item = data.get("Item", {})
+            if item.get("Id"):
+                self.add_library_task(item)
+                # 单集的同步与缺集闭环
+                if item.get("Type") == "Episode":
+                    from app.services.calendar_service import calendar_service
+                    calendar_service.mark_episode_ready(item.get("SeriesId"), item.get("ParentIndexNumber"), item.get("IndexNumber"))
+                    self._clear_gap_record_async(item)
+        
+        elif "playback.start" in event:
+            bus.publish("notify.playback.start", data)
+        elif "playback.stop" in event:
+            bus.publish("notify.playback.stop", data)
+        elif "authentication" in event or "login" in event:
+            bus.publish("notify.user.login", data)
+        elif "deleted" in event:
+            bus.publish("notify.item.deleted", data)
+
+    def _get_admin_id(self):
+        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
+        if not key or not host: return None
+        try:
+            res = requests.get(f"{host}/emby/Users?api_key={key}", timeout=5)
+            if res.status_code == 200:
+                users = res.json()
+                for u in users:
+                    if u.get("Policy", {}).get("IsAdministrator"): return u['Id']
+                if users: return users[0]['Id']
+        except: pass
+        return None
+
+    def _auto_finish_request(self, tmdb_id):
+        if not tmdb_id: return
+        try:
+            tid = int(tmdb_id)
+            query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ? AND status IN (0, 1, 4)", (tid,))
+        except Exception as e: pass
+
+    def _clear_gap_record_async(self, item: dict):
+        try:
+            if item.get("Type") != "Episode": return
+            series_id = str(item.get("SeriesId"))
+            season = int(item.get("ParentIndexNumber", -1))
+            episode = int(item.get("IndexNumber", -1))
+            if season == -1 or episode == -1: return
+
+            query_db("DELETE FROM gap_records WHERE series_id=? AND season_number=? AND episode_number=?", (series_id, season, episode))
+            try:
+                from app.routers.gaps import state_lock, scan_state
+                with state_lock:
+                    if scan_state.get("results"):
+                        for s in scan_state["results"]:
+                            if str(s.get("series_id")) == series_id:
+                                s["gaps"] = [ep for ep in s.get("gaps", []) if not (int(ep.get("season")) == season and int(ep.get("episode")) == episode)]
+                                if len(s["gaps"]) == 0 and s.get("tmdb_status") in ["Ended", "Canceled"]:
+                                    try: query_db("INSERT OR IGNORE INTO gap_perfect_series (series_id, tmdb_id, series_name) VALUES (?, ?, ?)", (series_id, s.get("tmdb_id"), s.get("series_name")))
+                                    except: pass
+                        scan_state["results"] = [s for s in scan_state["results"] if len(s.get("gaps", [])) > 0]
+                        query_db("INSERT OR REPLACE INTO gap_scan_cache (id, result_json, updated_at) VALUES (1, ?, datetime('now', 'localtime'))", (json.dumps(scan_state["results"]),))
+            except: pass
+        except Exception as e: pass
+
+    def add_library_task(self, item):
+        with self.library_lock:
+            if not any(x.get('Id') == item.get('Id') for x in self.library_queue):
+                self.library_queue.append(item)
+
+    def _library_notify_loop(self):
+        while self.running:
+            try:
+                with self.library_lock:
+                    has_data = len(self.library_queue) > 0
+                if not has_data:
+                    time.sleep(2)
+                    continue
+
+                idle_time = 0
+                last_len = 0
+                max_wait = 0
+                
+                while idle_time < 15 and max_wait < 120:
+                    time.sleep(3)
+                    idle_time += 3
+                    max_wait += 3
+                    with self.library_lock:
+                        curr_len = len(self.library_queue)
+                        if curr_len > last_len:
+                            idle_time = 0 
+                            last_len = curr_len
+                
+                items_to_process = []
+                with self.library_lock:
+                    items_to_process = self.library_queue[:]
+                    self.library_queue = [] 
+                
+                if items_to_process: self._process_library_group(items_to_process)
+            except Exception as e:
+                time.sleep(5)
+
+    def _process_library_group(self, items):
+        # ⚠️ 此处强制解耦：不论通不通知，系统业务必须执行！
+        groups = defaultdict(list)
+        for item in items:
+            itype = item.get('Type')
+            if itype in ['Episode', 'Season'] and item.get('SeriesId'):
+                sid = str(item.get('SeriesId'))
+                groups[sid].append(item)
+            elif itype == 'Series':
+                sid = str(item.get('Id'))
+                groups[sid].append(item)
+            else:
+                mid = str(item.get('Id'))
+                groups[mid].append(item)
+
+        for group_id, group_items in groups.items():
+            try:
+                is_tv = any(x.get('Type') in ['Episode', 'Season', 'Series'] for x in group_items)
+                if is_tv:
+                    fresh_episodes = self._check_fresh_episodes(group_id)
+                    if fresh_episodes: 
+                        self._push_episode_group(group_id, fresh_episodes)
+                    else:
+                        series_item = next((x for x in group_items if x.get('Type') == 'Series'), None)
+                        if series_item: self._push_single_item(series_item)
+                        else:
+                            episodes_only = [x for x in group_items if x.get('Type') == 'Episode']
+                            if episodes_only: self._push_episode_group(group_id, episodes_only)
+                else:
+                    self._push_single_item(group_items[0])
+                time.sleep(2) 
+            except Exception as e: pass
+
+    def _check_fresh_episodes(self, series_id):
+        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
+        admin_id = self._get_admin_id()
+        if not admin_id: return []
+        try:
+            url = f"{host}/emby/Users/{admin_id}/Items"
+            params = { "ParentId": series_id, "Recursive": "true", "IncludeItemTypes": "Episode", "Limit": 1000, "SortBy": "DateCreated", "SortOrder": "Descending", "Fields": "DateCreated,Name,ParentIndexNumber,IndexNumber", "api_key": key }
+            res = requests.get(url, params=params, timeout=10)
+            if res.status_code != 200: return []
+            items = res.json().get("Items", [])
+            if not items: return []
+            fresh_list = []
+            last_time = None
+            for i, item in enumerate(items):
+                curr_time = self._parse_emby_time(item.get("DateCreated"))
+                if not curr_time: 
+                    if i == 0: fresh_list.append(item)
+                    break
+                if i == 0:
+                    fresh_list.append(item)
+                    last_time = curr_time
+                else:
+                    delta = abs((last_time - curr_time).total_seconds())
+                    if delta <= 120:  
+                        fresh_list.append(item)
+                        last_time = curr_time 
+                    else: break 
+            return fresh_list
+        except Exception as e: return []
+
+    def _parse_emby_time(self, date_str):
+        if not date_str: return None
+        try:
+            clean_str = date_str.replace('Z', '')[:26]
+            if '.' in clean_str: return datetime.datetime.strptime(clean_str, "%Y-%m-%dT%H:%M:%S.%f")
+            else: return datetime.datetime.strptime(clean_str, "%Y-%m-%dT%H:%M:%S")
+        except: return None
+
+    def _push_episode_group(self, series_id, episodes):
+        try:
+            for ep in episodes:
+                s_idx = ep.get('ParentIndexNumber')
+                e_idx = ep.get('IndexNumber')
+                if s_idx is None or e_idx is None: continue
+                res = query_db("SELECT id FROM gap_records WHERE series_id=? AND season_number=? AND episode_number=? AND status=2", (series_id, s_idx, e_idx))
+                if res:
+                    query_db("DELETE FROM gap_records WHERE id=?", (res[0]['id'],))
+                    bus.publish("notify.gap_cleared", {"s_idx": s_idx, "e_idx": e_idx})
+        except Exception as e: pass
+
+        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
+        admin_id = self._get_admin_id()
+        series_info = {}
+        try:
+            url = f"{host}/emby/Users/{admin_id}/Items/{series_id}?api_key={key}"
+            res = requests.get(url, timeout=10)
+            if res.status_code == 200: series_info = res.json()
+        except: pass
+        if not series_info: series_info = episodes[0]
+
+        st_tmdb = series_info.get("ProviderIds", {}).get("Tmdb")
+        if st_tmdb: self._auto_finish_request(st_tmdb)
+
+        # 业务完成，抛给喇叭决定发不发
+        bus.publish("notify.library.new_episode", { "series_id": series_id, "episodes": episodes, "series_info": series_info })
+
+    def _push_single_item(self, item):
+        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
+        try:
+            url = f"{host}/emby/Items/{item['Id']}?api_key={key}"
+            res = requests.get(url, timeout=10)
+            if res.status_code == 200: item = res.json()
+        except: pass
+        tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
+        if tmdb_id: self._auto_finish_request(tmdb_id)
+        
+        bus.publish("notify.library.new_item", item)
+
+    def _scheduler_loop(self):
+        while self.running:
+            try:
+                now = datetime.datetime.now()
+                if now.minute != self.last_check_min:
+                    self.last_check_min = now.minute
+                    if now.hour == 9 and now.minute == 0:
+                        self._check_user_expiration()
+                        bus.publish("notify.daily_report")
+                            
+                if now.minute % 10 == 0 and now.minute != self.last_sync_min:
+                    self.last_sync_min = now.minute
+                    self._sync_pending_requests()
+                    
+                time.sleep(5)
+            except: time.sleep(60)
+
+    def _sync_pending_requests(self):
+        try:
+            rows = query_db("SELECT tmdb_id, media_type, season FROM media_requests WHERE status IN (1, 4)")
+            if not rows: return
+            host = cfg.get("emby_host"); key = cfg.get("emby_api_key")
+            admin_id = self._get_admin_id()
+            if not admin_id: return
+            
+            for r in rows:
+                tid = r['tmdb_id']; mtype = r['media_type']; sn = r['season']
+                type_filter = "Movie" if mtype == "movie" else "Series"
+                url = f"{host}/emby/Users/{admin_id}/Items?AnyProviderIdEquals=tmdb.{tid}&IncludeItemTypes={type_filter}&Recursive=true&api_key={key}"
+                res = requests.get(url, timeout=5).json()
+                
+                if res.get("Items"):
+                    if mtype == "movie":
+                        query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ?", (tid,))
+                    else:
+                        sid = res["Items"][0]["Id"]
+                        s_res = requests.get(f"{host}/emby/Shows/{sid}/Seasons?api_key={key}&UserId={admin_id}", timeout=5).json()
+                        local_seasons = [s.get("IndexNumber") for s in s_res.get("Items", [])]
+                        if sn in local_seasons:
+                            query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ? AND season = ?", (tid, sn))
+                time.sleep(0.5) 
+        except Exception as e: pass
+
+    def _check_user_expiration(self):
+        try:
+            users = query_db("SELECT user_id, expire_date FROM users_meta WHERE expire_date IS NOT NULL AND expire_date != ''")
+            if not users: return
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
+            for u in users:
+                if u['expire_date'] < today:
+                    try: requests.post(f"{host}/emby/Users/{u['user_id']}/Policy?api_key={key}", json={"IsDisabled": True})
+                    except: pass
+        except: pass
+
+
+# ==============================================================================
+# 📣 第二层：表达层 (Notification Bot)
+# 职责：严格根据 Config 里的颗粒度开关，决定是否对外推流。
+# ==============================================================================
+class NotificationBot:
+    def __init__(self):
+        self.running = False
+        self.poll_thread = None
+        self.offset = 0
         self.user_cache = {}
         self.ip_cache = {} 
-        
         self.wecom_token = None
         self.wecom_token_expires = 0
         
+        bus.subscribe("notify.library.new_episode", self.on_library_new_episode)
+        bus.subscribe("notify.library.new_item", self.on_library_new_item)
+        bus.subscribe("notify.gap_cleared", self.on_gap_cleared)
+        bus.subscribe("notify.playback.start", lambda data: self.on_playback_event(data, "start"))
+        bus.subscribe("notify.playback.stop", lambda data: self.on_playback_event(data, "stop"))
+        bus.subscribe("notify.user.login", self.on_user_login)
+        bus.subscribe("notify.item.deleted", self.on_item_deleted)
+        bus.subscribe("notify.daily_report", self.on_daily_report)
+
     def start(self):
         if self.running: return
         if not cfg.get("tg_bot_token") and not cfg.get("wecom_corpid"): return
@@ -45,32 +352,187 @@ class TelegramBot:
             self.poll_thread = threading.Thread(target=self._polling_loop, daemon=True)
             self.poll_thread.start()
         
-        self.schedule_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
-        self.schedule_thread.start()
-        
-        self.library_thread = threading.Thread(target=self._library_notify_loop, daemon=True)
-        self.library_thread.start()
-        
-        print("🤖 Bot Service Started (Dual Channel Interactive Mode)")
+        logger.info("🤖 Notification Bot Started")
 
     def stop(self): self.running = False
 
+    # ---------- 事件订阅入口 ----------
+    def on_gap_cleared(self, data):
+        if not cfg.get("enable_library_notify"): return
+        s_idx = data["s_idx"]; e_idx = data["e_idx"]
+        msg = (f"🎉 <b>残卷补全成功！</b>\n\n📺 剧集已刮削：<b>S{str(s_idx).zfill(2)}E{str(e_idx).zfill(2)}</b>\n"
+               f"✅ 状态：缺集工单已自动核销闭环\n<i>拼图已圆满，强迫症得到治愈。</i>")
+        self.send_message("sys_notify", msg, platform="all")
+
+    def on_library_new_episode(self, data):
+        if not cfg.get("enable_library_notify"): return
+        series_id = data["series_id"]; episodes = data["episodes"]; series_info = data["series_info"]
+
+        season_groups = defaultdict(list)
+        for ep in episodes: season_groups[ep.get('ParentIndexNumber', 1)].append(ep)
+            
+        season_strs = []; total_eps = 0
+        def zf(num): return str(num).zfill(2)
+
+        for s_idx in sorted(season_groups.keys()):
+            s_eps = season_groups[s_idx]
+            ep_indices = sorted(list(set([e.get('IndexNumber', 0) for e in s_eps if e.get('IndexNumber') is not None])))
+            total_eps += len(ep_indices)
+            if len(ep_indices) > 1:
+                ranges = []; start = ep_indices[0]; end = ep_indices[0]
+                for idx in ep_indices[1:]:
+                    if idx == end + 1: end = idx
+                    else:
+                        ranges.append(f"E{zf(start)}" if start == end else f"E{zf(start)}-E{zf(end)}")
+                        start = idx; end = idx
+                ranges.append(f"E{zf(start)}" if start == end else f"E{zf(start)}-E{zf(end)}")
+                season_strs.append(f"S{zf(s_idx)}{', '.join(ranges)}")
+            elif len(ep_indices) == 1:
+                season_strs.append(f"S{zf(s_idx)}E{zf(ep_indices[0])}")
+
+        final_ep_str = ", ".join(season_strs)
+        title_suffix = f"{final_ep_str} (共{total_eps}集)" if total_eps > 1 else final_ep_str
+        
+        if total_eps == 1 and len(episodes) == 1:
+            ep_name = episodes[0].get('Name', '')
+            if ep_name and "Episode" not in ep_name and "第" not in ep_name: title_suffix += f" {ep_name}"
+
+        series_name = series_info.get('Name', '未知剧集')
+        year = series_info.get("ProductionYear", "")
+        rating = series_info.get("CommunityRating", "N/A")
+        overview = series_info.get("Overview", "暂无简介...") 
+        if len(overview) > 150: overview = overview[:140] + "..."
+        
+        base_url = cfg.get("emby_public_url") or cfg.get("emby_host")
+        if base_url.endswith('/'): base_url = base_url[:-1]
+        play_url = f"{base_url}/web/index.html#!/item?id={series_id}&serverId={series_info.get('ServerId','')}"
+
+        caption = (f"📺 <b>新入库 剧集 {series_name}</b> {title_suffix}\n\n📌 年份：{year}  |  ⭐ 评分：{rating}\n"
+                   f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n📝 <b>剧情简介：</b>\n{overview}")
+
+        keyboard = {"inline_keyboard": [[{"text": "▶️ 立即播放", "url": play_url}]]}
+        primary_io = self._download_emby_image(series_id, 'Primary')
+        backdrop_io = self._download_emby_image(series_id, 'Backdrop') 
+        tg_img = primary_io or backdrop_io or REPORT_COVER_URL
+        wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
+        self.send_photo("sys_notify", tg_img, caption, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
+
+    def on_library_new_item(self, item):
+        if not cfg.get("enable_library_notify"): return
+        name = item.get("Name", "未知")
+        year = item.get("ProductionYear", "")
+        rating = item.get("CommunityRating", "N/A")
+        overview = item.get("Overview", "暂无简介...")
+        if len(overview) > 150: overview = overview[:140] + "..."
+        
+        type_raw = item.get("Type")
+        type_cn = "电影"; type_icon = "🎬"
+        if type_raw in ["Series", "Episode"]: type_cn = "剧集"; type_icon = "📺"
+        
+        base_url = cfg.get("emby_public_url") or cfg.get("emby_host")
+        if base_url.endswith('/'): base_url = base_url[:-1]
+        play_url = f"{base_url}/web/index.html#!/item?id={item['Id']}&serverId={item.get('ServerId','')}"
+
+        caption = (f"{type_icon} <b>新入库 {type_cn} {name}</b> ({year})\n\n⭐ 评分：{rating} / 10\n"
+                   f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n📝 <b>剧情简介：</b>\n{overview}")
+        
+        keyboard = {"inline_keyboard": [[{"text": "▶️ 立即播放", "url": play_url}]]}
+        primary_io = self._download_emby_image(item['Id'], 'Primary')
+        backdrop_io = self._download_emby_image(item['Id'], 'Backdrop')
+        tg_img = primary_io or backdrop_io or REPORT_COVER_URL
+        wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
+        self.send_photo("sys_notify", tg_img, caption, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
+
+    def on_playback_event(self, data, action):
+        if not cfg.get("enable_notify"): return
+        try:
+            user = data.get("User", {}); item = data.get("Item", {}); session = data.get("Session", {})
+            title = item.get("Name", "未知内容")
+            ep_info = ""; raw_type = item.get("Type", "")
+            type_map = {"Episode": "剧集", "Movie": "电影", "Audio": "音乐", "MusicVideo": "MV", "LiveTvProgram": "直播", "TvChannel": "频道"}
+            type_cn = type_map.get(raw_type, "媒体")
+            
+            if raw_type == "Episode" and item.get("SeriesName"): 
+                idx = item.get("IndexNumber", 0); parent_idx = item.get("ParentIndexNumber", 1)
+                ep_info = f" S{str(parent_idx).zfill(2)}E{str(idx).zfill(2)} 第 {idx} 集"
+                title = f"{item.get('SeriesName')}"
+            elif raw_type == "Audio" and item.get("Artists"):
+                artist_str = ", ".join(item.get("Artists"))
+                title = f"{title} - {artist_str}"
+            
+            emoji = "▶️" if action == "start" else "⏹️"; act = "开始播放" if action == "start" else "停止播放"
+            ip = session.get("RemoteEndPoint", "127.0.0.1"); loc = self._get_location(ip)
+            
+            msg = (f"{emoji} <b>【{user.get('Name')}】{act} {type_cn} {title}</b>{ep_info}\n\n"
+                   f"🌐 地址：{ip} ({loc})\n📱 设备：{session.get('Client')} on {session.get('DeviceName')}\n🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            target_id = item.get("Id")
+            if raw_type == "Episode" and item.get("SeriesId"): target_id = item.get("SeriesId")
+            elif raw_type == "Audio" and item.get("AlbumId"): target_id = item.get("AlbumId")
+            
+            base_url = cfg.get("emby_public_url") or cfg.get("emby_host")
+            if base_url.endswith('/'): base_url = base_url[:-1]
+            play_url = f"{base_url}/web/index.html#!/item?id={target_id}&serverId={item.get('ServerId','')}"
+            keyboard = {"inline_keyboard": [[{"text": "🔗 跳转详情", "url": play_url}]]}
+
+            primary_io = self._download_emby_image(target_id, 'Primary') 
+            backdrop_io = self._download_emby_image(target_id, 'Backdrop')
+            if not primary_io and not backdrop_io:
+                primary_io = self._download_emby_image(item.get("Id"), 'Primary')
+                backdrop_io = self._download_emby_image(item.get("Id"), 'Backdrop')
+
+            tg_img = primary_io or backdrop_io or REPORT_COVER_URL
+            wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
+            self.send_photo("sys_notify", tg_img, msg, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
+        except Exception as e: pass
+
+    def on_user_login(self, data):
+        if not cfg.get("notify_user_login"): return
+        try:
+            user = data.get("User", {})
+            session = data.get("Session", {})
+            ip = session.get("RemoteEndPoint", "127.0.0.1")
+            loc = self._get_location(ip)
+            client = session.get("Client") or data.get("Client") or "未知设备"
+            dev_name = session.get("DeviceName") or data.get("DeviceName") or "未知终端"
+            
+            msg = (f"🔐 <b>【{user.get('Name')}】登录了媒体库</b>\n\n"
+                   f"🌐 地址：{ip} ({loc})\n📱 设备：{client} on {dev_name}\n"
+                   f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.send_message("sys_notify", msg, platform="all")
+        except Exception as e: pass
+
+    def on_item_deleted(self, data):
+        if not cfg.get("notify_item_deleted"): return
+        try:
+            item = data.get("Item", {})
+            title = item.get("Name", "未知")
+            if item.get("SeriesName"): title = f"{item.get('SeriesName')} - {title}"
+            
+            msg = (f"🗑️ <b>资源删除预警</b>\n\n"
+                   f"🎬 内容：{title}\n🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.send_message("sys_notify", msg, platform="all")
+        except Exception as e: pass
+
+    def on_daily_report(self):
+        chat_id = "sys_notify"
+        where = "WHERE DateCreated >= date('now', '-1 day', 'start of day') AND DateCreated < date('now', 'start of day')"
+        res = query_db(f"SELECT COUNT(*) as c FROM PlaybackActivity {where}")
+        count = res[0]['c'] if res else 0
+        if count == 0:
+            yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+            msg = (f"📅 <b>昨日日报 ({yesterday_str})</b>\n\n😴 昨天服务器静悄悄，大家都去现充了吗？\n\n📊 活跃用户：0 人\n⏳ 播放时长：0 小时")
+            self.send_message(chat_id, msg, platform="all")
+        else: self._cmd_stats(chat_id, 'yesterday', platform="all")
+
+    def push_now(self, user_id, period, theme):
+        self._cmd_stats("sys_notify", period, platform="all")
+        return True
+
+    # ---------- 基础工具与通信通道 ----------
     def _get_proxies(self):
         proxy = cfg.get("proxy_url")
         return {"http": proxy, "https": proxy} if proxy else None
-
-    def add_library_task(self, item):
-        with self.library_lock:
-            if not any(x.get('Id') == item.get('Id') for x in self.library_queue):
-                self.library_queue.append(item)
-
-    def _auto_finish_request(self, tmdb_id):
-        if not tmdb_id: return
-        try:
-            tid = int(tmdb_id)
-            query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ? AND status IN (0, 1, 4)", (tid,))
-        except Exception as e:
-            pass
 
     def _get_admin_id(self):
         key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
@@ -101,21 +563,18 @@ class TelegramBot:
         is_ipv6 = False
         try:
             ip_obj = ipaddress.ip_address(ip)
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
-                return "局域网"
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local: return "局域网"
             is_ipv6 = (ip_obj.version == 6)
         except: pass
         
         if ip in self.ip_cache: return self.ip_cache[ip]
         loc = ""
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         try:
             res = requests.get(f"https://forge.speedtest.cn/api/location/info?ip={ip}", headers=headers, timeout=3)
             if res.status_code == 200:
                 d = res.json()
-                if d.get("country"):
-                    prov = d.get("province", ""); city = d.get("city", ""); isp = d.get("isp", "")
-                    loc = f"{d.get('country')} {prov} {city} {isp}".strip()
+                if d.get("country"): loc = f"{d.get('country')} {d.get('province', '')} {d.get('city', '')} {d.get('isp', '')}".strip()
         except: pass
 
         if not loc or "上饶" in loc:
@@ -267,8 +726,7 @@ class TelegramBot:
                     
                     if photo_bytes: 
                         r = requests.post(f"https://api.telegram.org/bot{cfg.get('tg_bot_token')}/sendPhoto", data=data, files={"photo": ("image.jpg", io.BytesIO(photo_bytes), "image/jpeg")}, proxies=self._get_proxies(), timeout=20)
-                        if r.status_code != 200:
-                            self.send_message(tg_cid, caption, parse_mode, reply_markup, platform="tg")
+                        if r.status_code != 200: self.send_message(tg_cid, caption, parse_mode, reply_markup, platform="tg")
                     else: 
                         self.send_message(tg_cid, caption, parse_mode, reply_markup, platform="tg")
                 except: 
@@ -287,8 +745,7 @@ class TelegramBot:
                     requests.post(f"https://api.telegram.org/bot{cfg.get('tg_bot_token')}/sendMessage", json=data, proxies=self._get_proxies(), timeout=10)
                 except: pass
 
-    # ================= 🚀 交互式回调引擎 =================
-    
+    # ---------- 交互与回调处理 ----------
     def _polling_loop(self):
         token = cfg.get("tg_bot_token"); admin_id = str(cfg.get("tg_chat_id"))
         while self.running:
@@ -319,17 +776,14 @@ class TelegramBot:
 
         if data.startswith("feed_"):
             parts = data.split("_")
-            action = parts[1]
-            feed_id = int(parts[2])
+            action = parts[1]; feed_id = int(parts[2])
             status_map = {"fix": 1, "done": 2, "reject": 3}
             status_text = {"fix": "🛠️ 已标记：修复中", "done": "✅ 已标记：修复完成", "reject": "❌ 已标记：暂不处理(忽略)"}
             
             if action in status_map:
                 query_db("UPDATE media_feedback SET status = ? WHERE id = ?", (status_map[action], feed_id))
-                
                 msg_obj = cq["message"]
                 operator = cq.get('from', {}).get('first_name', 'Admin')
-                
                 if "caption" in msg_obj:
                     orig_text = msg_obj.get("caption", "资源报错工单")
                     new_text = f"{orig_text}\n\n━━━━━━━━━━━━━━\n{status_text[action]}\n(操作人: {operator})"
@@ -614,20 +1068,6 @@ class TelegramBot:
         except Exception as e:
             self.send_message(chat_id, f"❌ 统计失败", platform=platform)
 
-    def _daily_report_task(self):
-        chat_id = "sys_notify"
-        where = "WHERE DateCreated >= date('now', '-1 day', 'start of day') AND DateCreated < date('now', 'start of day')"
-        res = query_db(f"SELECT COUNT(*) as c FROM PlaybackActivity {where}")
-        count = res[0]['c'] if res else 0
-        if count == 0:
-            yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-            msg = (f"📅 <b>昨日日报 ({yesterday_str})</b>\n\n"
-                   f"😴 昨天服务器静悄悄，大家都去现充了吗？\n\n"
-                   f"📊 活跃用户：0 人\n"
-                   f"⏳ 播放时长：0 小时")
-            self.send_message(chat_id, msg, platform="all")
-        else: self._cmd_stats(chat_id, 'yesterday', platform="all")
-
     def _cmd_now(self, cid, platform):
         key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
         try:
@@ -674,375 +1114,48 @@ class TelegramBot:
         except: self.send_message(cid, "❌ 离线", platform=platform)
 
     def _cmd_help(self, cid, platform):
-        msg = (
-            "🤖 <b>EmbyPulse 智能助理指南</b>\n\n"
-            "📊 <b>数据报表指令</b>\n"
-            "/stats - 获取今日播放大盘与用户排行\n"
-            "/weekly - 获取本周全站数据周报\n"
-            "/monthly - 获取本月活跃度月报\n"
-            "/yearly - 获取年度全景总结数据\n\n"
-            "🎬 <b>媒体库与状态指令</b>\n"
-            "/now - 查看当前服务器有谁正在播放\n"
-            "/latest - 获取最近新入库的 8 部影视剧\n"
-            "/recent - 查看本站最近的 10 条播放历史\n"
-            "/search [关键词] - 搜索影视资源并获取直达链接\n\n"
-            "🛠 <b>系统管理指令</b>\n"
-            "/check - 测试 Emby 服务器连通性与网络延迟\n"
-            "/help - 获取本帮助菜单"
-        )
+        msg = ("🤖 <b>EmbyPulse 智能助理指南</b>\n\n"
+               "📊 <b>数据报表指令</b>\n"
+               "/stats - 获取今日播放大盘与用户排行\n"
+               "/weekly - 获取本周全站数据周报\n"
+               "/monthly - 获取本月活跃度月报\n"
+               "/yearly - 获取年度全景总结数据\n\n"
+               "🎬 <b>媒体库与状态指令</b>\n"
+               "/now - 查看当前服务器有谁正在播放\n"
+               "/latest - 获取最近新入库的 8 部影视剧\n"
+               "/recent - 查看本站最近的 10 条播放历史\n"
+               "/search [关键词] - 搜索影视资源并获取直达链接\n\n"
+               "🛠 <b>系统管理指令</b>\n"
+               "/check - 测试 Emby 服务器连通性与网络延迟\n"
+               "/help - 获取本帮助菜单")
         self.send_message(cid, msg.strip(), platform=platform)
 
-    def _scheduler_loop(self):
-        while self.running:
-            try:
-                now = datetime.datetime.now()
-                if now.minute != self.last_check_min:
-                    self.last_check_min = now.minute
-                    if now.hour == 9 and now.minute == 0:
-                        self._check_user_expiration()
-                        if cfg.get("tg_chat_id") or cfg.get("wecom_corpid"): 
-                            self._daily_report_task()
-                            
-                if now.minute % 10 == 0 and now.minute != self.last_sync_min:
-                    self.last_sync_min = now.minute
-                    self._sync_pending_requests()
-                    
-                time.sleep(5)
-            except: time.sleep(60)
-            
-    def _sync_pending_requests(self):
-        try:
-            rows = query_db("SELECT tmdb_id, media_type, season FROM media_requests WHERE status IN (1, 4)")
-            if not rows: return
-            
-            host = cfg.get("emby_host"); key = cfg.get("emby_api_key")
-            admin_id = self._get_admin_id()
-            if not admin_id: return
-            
-            for r in rows:
-                tid = r['tmdb_id']; mtype = r['media_type']; sn = r['season']
-                type_filter = "Movie" if mtype == "movie" else "Series"
-                url = f"{host}/emby/Users/{admin_id}/Items?AnyProviderIdEquals=tmdb.{tid}&IncludeItemTypes={type_filter}&Recursive=true&api_key={key}"
-                res = requests.get(url, timeout=5).json()
-                
-                if res.get("Items"):
-                    if mtype == "movie":
-                        query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ?", (tid,))
-                    else:
-                        sid = res["Items"][0]["Id"]
-                        s_res = requests.get(f"{host}/emby/Shows/{sid}/Seasons?api_key={key}&UserId={admin_id}", timeout=5).json()
-                        local_seasons = [s.get("IndexNumber") for s in s_res.get("Items", [])]
-                        if sn in local_seasons:
-                            query_db("UPDATE media_requests SET status = 2, updated_at = CURRENT_TIMESTAMP WHERE tmdb_id = ? AND season = ?", (tid, sn))
-                time.sleep(0.5) 
-        except Exception as e: pass
 
-    def _check_user_expiration(self):
-        try:
-            users = query_db("SELECT user_id, expire_date FROM users_meta WHERE expire_date IS NOT NULL AND expire_date != ''")
-            if not users: return
-            today = datetime.datetime.now().strftime("%Y-%m-%d")
-            key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
-            for u in users:
-                if u['expire_date'] < today:
-                    try: requests.post(f"{host}/emby/Users/{u['user_id']}/Policy?api_key={key}", json={"IsDisabled": True})
-                    except: pass
-        except: pass
-    
+# ==============================================================================
+# 🎮 终极包装层：兼容原所有的 bot.start() 等调用
+# ==============================================================================
+class EmbyPulseOrchestrator:
+    def __init__(self):
+        self.daemon = SystemDaemon()
+        self.notifier = NotificationBot()
+        
+    def start(self):
+        self.daemon.start()
+        self.notifier.start()
+        
+    def stop(self):
+        self.daemon.stop()
+        self.notifier.stop()
+        
     def push_now(self, user_id, period, theme):
-        self._cmd_stats("sys_notify", period, platform="all")
-        return True
-
-    def _library_notify_loop(self):
-        while self.running:
-            try:
-                with self.library_lock:
-                    if len(self.library_queue) == 0:
-                        has_data = False
-                    else:
-                        has_data = True
-                
-                if not has_data:
-                    time.sleep(2)
-                    continue
-
-                # 🔥 动态防抖引擎 (Dynamic Debounce)
-                # 等待 Emby 的 Webhook 狂暴轰炸平息，再进行统一结算
-                idle_time = 0
-                last_len = 0
-                max_wait = 0
-                
-                while idle_time < 15 and max_wait < 120:
-                    time.sleep(3)
-                    idle_time += 3
-                    max_wait += 3
-                    
-                    with self.library_lock:
-                        curr_len = len(self.library_queue)
-                        if curr_len > last_len:
-                            idle_time = 0  # 只要有新集数进来，发呆时间清零，继续等
-                            last_len = curr_len
-                
-                items_to_process = []
-                with self.library_lock:
-                    items_to_process = self.library_queue[:]
-                    self.library_queue = [] 
-                
-                if items_to_process: self._process_library_group(items_to_process)
-            except Exception as e:
-                time.sleep(5)
-
-    def _process_library_group(self, items):
-        if not cfg.get("enable_library_notify"): return
+        return self.notifier._cmd_stats("sys_notify", period, platform="all")
         
-        groups = defaultdict(list)
-        for item in items:
-            itype = item.get('Type')
-            if itype in ['Episode', 'Season'] and item.get('SeriesId'):
-                sid = str(item.get('SeriesId'))
-                groups[sid].append(item)
-            elif itype == 'Series':
-                sid = str(item.get('Id'))
-                groups[sid].append(item)
-            else:
-                mid = str(item.get('Id'))
-                groups[mid].append(item)
-
-        for group_id, group_items in groups.items():
-            try:
-                is_tv = any(x.get('Type') in ['Episode', 'Season', 'Series'] for x in group_items)
-                if is_tv:
-                    # 🚀 斩断乱局：直接用 SeriesId 去 API 查最新的连贯集数，无视 Webhook 碎件！
-                    fresh_episodes = self._check_fresh_episodes(group_id)
-                    if fresh_episodes: 
-                        self._push_episode_group(group_id, fresh_episodes)
-                    else:
-                        series_item = next((x for x in group_items if x.get('Type') == 'Series'), None)
-                        if series_item: self._push_single_item(series_item)
-                        else:
-                            episodes_only = [x for x in group_items if x.get('Type') == 'Episode']
-                            if episodes_only: self._push_episode_group(group_id, episodes_only)
-                else:
-                    self._push_single_item(group_items[0])
-                time.sleep(2) 
-            except Exception as e: pass
-
-    def _check_fresh_episodes(self, series_id):
-        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
-        admin_id = self._get_admin_id()
-        if not admin_id: return []
+    # 保留给那些没有用 webhook 的特殊内部路由调用
+    def add_library_task(self, item):
+        self.daemon.add_library_task(item)
         
-        try:
-            url = f"{host}/emby/Users/{admin_id}/Items"
-            # 🔥 解除 20 集封印，提升到 1000 集
-            params = {
-                "ParentId": series_id, "Recursive": "true", "IncludeItemTypes": "Episode",
-                "Limit": 1000, "SortBy": "DateCreated", "SortOrder": "Descending",
-                "Fields": "DateCreated,Name,ParentIndexNumber,IndexNumber", "api_key": key
-            }
-            res = requests.get(url, params=params, timeout=10)
-            if res.status_code != 200: return []
-            
-            items = res.json().get("Items", [])
-            if not items: return []
-
-            fresh_list = []
-            last_time = None
-
-            for i, item in enumerate(items):
-                curr_time = self._parse_emby_time(item.get("DateCreated"))
-                if not curr_time: 
-                    if i == 0: fresh_list.append(item)
-                    break
-                if i == 0:
-                    fresh_list.append(item)
-                    last_time = curr_time
-                else:
-                    delta = abs((last_time - curr_time).total_seconds())
-                    # 🔥 容错时间拉长到 120 秒，防范大包刮削卡顿
-                    if delta <= 120:  
-                        fresh_list.append(item)
-                        last_time = curr_time 
-                    else: break 
-            return fresh_list
-        except Exception as e: return []
-
-    def _parse_emby_time(self, date_str):
-        if not date_str: return None
-        try:
-            clean_str = date_str.replace('Z', '')[:26]
-            if '.' in clean_str: return datetime.datetime.strptime(clean_str, "%Y-%m-%dT%H:%M:%S.%f")
-            else: return datetime.datetime.strptime(clean_str, "%Y-%m-%dT%H:%M:%S")
-        except: return None
-
-    def _push_episode_group(self, series_id, episodes):
-        try:
-            for ep in episodes:
-                s_idx = ep.get('ParentIndexNumber')
-                e_idx = ep.get('IndexNumber')
-                if s_idx is None or e_idx is None: continue
-                res = query_db("SELECT id FROM gap_records WHERE series_id=? AND season_number=? AND episode_number=? AND status=2", (series_id, s_idx, e_idx))
-                if res:
-                    query_db("DELETE FROM gap_records WHERE id=?", (res[0]['id'],))
-                    success_msg = (f"🎉 <b>残卷补全成功！</b>\n\n"
-                                   f"📺 剧集已刮削：<b>S{str(s_idx).zfill(2)}E{str(e_idx).zfill(2)}</b>\n"
-                                   f"✅ 状态：缺集工单已自动核销闭环\n"
-                                   f"<i>拼图已圆满，强迫症得到治愈。</i>")
-                    self.send_message("sys_notify", success_msg, platform="all")
-        except Exception as e: pass
-
-        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
-        admin_id = self._get_admin_id()
-        
-        series_info = {}
-        try:
-            url = f"{host}/emby/Users/{admin_id}/Items/{series_id}?api_key={key}"
-            res = requests.get(url, timeout=10)
-            if res.status_code == 200: series_info = res.json()
-        except: pass
-        if not series_info: series_info = episodes[0]
-
-        st_tmdb = series_info.get("ProviderIds", {}).get("Tmdb")
-        if st_tmdb: self._auto_finish_request(st_tmdb)
-
-        season_groups = defaultdict(list)
-        for ep in episodes:
-            s_idx = ep.get('ParentIndexNumber', 1)
-            season_groups[s_idx].append(ep)
-            
-        season_strs = []
-        total_eps = 0
-        def zf(num): return str(num).zfill(2)
-
-        for s_idx in sorted(season_groups.keys()):
-            s_eps = season_groups[s_idx]
-            ep_indices = sorted(list(set([e.get('IndexNumber', 0) for e in s_eps if e.get('IndexNumber') is not None])))
-            total_eps += len(ep_indices)
-            
-            if len(ep_indices) > 1:
-                ranges = []
-                start = ep_indices[0]; end = ep_indices[0]
-                for idx in ep_indices[1:]:
-                    if idx == end + 1: end = idx
-                    else:
-                        ranges.append(f"E{zf(start)}" if start == end else f"E{zf(start)}-E{zf(end)}")
-                        start = idx; end = idx
-                ranges.append(f"E{zf(start)}" if start == end else f"E{zf(start)}-E{zf(end)}")
-                season_strs.append(f"S{zf(s_idx)}{', '.join(ranges)}")
-            elif len(ep_indices) == 1:
-                season_strs.append(f"S{zf(s_idx)}E{zf(ep_indices[0])}")
-
-        final_ep_str = ", ".join(season_strs)
-        title_suffix = f"{final_ep_str} (共{total_eps}集)" if total_eps > 1 else final_ep_str
-        
-        if total_eps == 1 and len(episodes) == 1:
-            ep_name = episodes[0].get('Name', '')
-            if ep_name and "Episode" not in ep_name and "第" not in ep_name:
-                title_suffix += f" {ep_name}"
-
-        series_name = series_info.get('Name', '未知剧集')
-        year = series_info.get("ProductionYear", "")
-        rating = series_info.get("CommunityRating", "N/A")
-        overview = series_info.get("Overview", "暂无简介...") 
-        if len(overview) > 150: overview = overview[:140] + "..."
-        
-        base_url = cfg.get("emby_public_url") or cfg.get("emby_host")
-        if base_url.endswith('/'): base_url = base_url[:-1]
-        play_url = f"{base_url}/web/index.html#!/item?id={series_id}&serverId={series_info.get('ServerId','')}"
-
-        caption = (f"📺 <b>新入库 剧集 {series_name}</b> {title_suffix}\n\n"
-                   f"📌 年份：{year}  |  ⭐ 评分：{rating}\n"
-                   f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
-                   f"📝 <b>剧情简介：</b>\n{overview}")
-
-        keyboard = {"inline_keyboard": [[{"text": "▶️ 立即播放", "url": play_url}]]}
-        primary_io = self._download_emby_image(series_id, 'Primary')
-        backdrop_io = self._download_emby_image(series_id, 'Backdrop') 
-        tg_img = primary_io or backdrop_io or REPORT_COVER_URL
-        wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
-        self.send_photo("sys_notify", tg_img, caption, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
-
-    def _push_single_item(self, item):
-        key = cfg.get("emby_api_key"); host = cfg.get("emby_host")
-        try:
-            url = f"{host}/emby/Items/{item['Id']}?api_key={key}"
-            res = requests.get(url, timeout=10)
-            if res.status_code == 200: item = res.json()
-        except: pass
-
-        tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
-        if tmdb_id: self._auto_finish_request(tmdb_id)
-
-        name = item.get("Name", "未知")
-        year = item.get("ProductionYear", "")
-        rating = item.get("CommunityRating", "N/A")
-        overview = item.get("Overview", "暂无简介...")
-        if len(overview) > 150: overview = overview[:140] + "..."
-        
-        type_raw = item.get("Type")
-        type_cn = "电影"; type_icon = "🎬"
-        if type_raw in ["Series", "Episode"]: type_cn = "剧集"; type_icon = "📺"
-        
-        base_url = cfg.get("emby_public_url") or cfg.get("emby_host")
-        if base_url.endswith('/'): base_url = base_url[:-1]
-        play_url = f"{base_url}/web/index.html#!/item?id={item['Id']}&serverId={item.get('ServerId','')}"
-
-        caption = (f"{type_icon} <b>新入库 {type_cn} {name}</b> ({year})\n\n"
-                   f"⭐ 评分：{rating} / 10\n"
-                   f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
-                   f"📝 <b>剧情简介：</b>\n{overview}")
-        
-        keyboard = {"inline_keyboard": [[{"text": "▶️ 立即播放", "url": play_url}]]}
-        primary_io = self._download_emby_image(item['Id'], 'Primary')
-        backdrop_io = self._download_emby_image(item['Id'], 'Backdrop')
-        tg_img = primary_io or backdrop_io or REPORT_COVER_URL
-        wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
-        self.send_photo("sys_notify", tg_img, caption, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
-
     def push_playback_event(self, data, action="start"):
-        if not cfg.get("enable_notify"): return
-        try:
-            user = data.get("User", {}); item = data.get("Item", {}); session = data.get("Session", {})
-            title = item.get("Name", "未知内容")
-            ep_info = ""; raw_type = item.get("Type", "")
-            
-            type_map = {"Episode": "剧集", "Movie": "电影", "Audio": "音乐", "MusicVideo": "MV", "LiveTvProgram": "直播", "TvChannel": "频道"}
-            type_cn = type_map.get(raw_type, "媒体")
-            
-            if raw_type == "Episode" and item.get("SeriesName"): 
-                idx = item.get("IndexNumber", 0); parent_idx = item.get("ParentIndexNumber", 1)
-                ep_info = f" S{str(parent_idx).zfill(2)}E{str(idx).zfill(2)} 第 {idx} 集"
-                title = f"{item.get('SeriesName')}"
-            elif raw_type == "Audio" and item.get("Artists"):
-                artist_str = ", ".join(item.get("Artists"))
-                title = f"{title} - {artist_str}"
-            
-            emoji = "▶️" if action == "start" else "⏹️"; act = "开始播放" if action == "start" else "停止播放"
-            ip = session.get("RemoteEndPoint", "127.0.0.1"); loc = self._get_location(ip)
-            
-            msg = (f"{emoji} <b>【{user.get('Name')}】{act} {type_cn} {title}</b>{ep_info}\n\n"
-                   f"🌐 地址：{ip} ({loc})\n"
-                   f"📱 设备：{session.get('Client')} on {session.get('DeviceName')}\n"
-                   f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            
-            target_id = item.get("Id")
-            if raw_type == "Episode" and item.get("SeriesId"): target_id = item.get("SeriesId")
-            elif raw_type == "Audio" and item.get("AlbumId"): target_id = item.get("AlbumId")
-            
-            base_url = cfg.get("emby_public_url") or cfg.get("emby_host")
-            if base_url.endswith('/'): base_url = base_url[:-1]
-            play_url = f"{base_url}/web/index.html#!/item?id={target_id}&serverId={item.get('ServerId','')}"
-            keyboard = {"inline_keyboard": [[{"text": "🔗 跳转详情", "url": play_url}]]}
+        bus.publish("webhook.received", f"playback.{action}", data)
 
-            primary_io = self._download_emby_image(target_id, 'Primary') 
-            backdrop_io = self._download_emby_image(target_id, 'Backdrop')
-            if not primary_io and not backdrop_io:
-                primary_io = self._download_emby_image(item.get("Id"), 'Primary')
-                backdrop_io = self._download_emby_image(item.get("Id"), 'Backdrop')
-
-            tg_img = primary_io or backdrop_io or REPORT_COVER_URL
-            wecom_img = backdrop_io or primary_io or REPORT_COVER_URL
-            self.send_photo("sys_notify", tg_img, msg, reply_markup=keyboard, platform="all", wecom_photo_io=wecom_img)
-        except Exception as e: pass
-
-bot = TelegramBot()
+# 暴露单例
+bot = EmbyPulseOrchestrator()
