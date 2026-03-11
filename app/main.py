@@ -27,7 +27,6 @@ init_db()
 # 🔥 真·物理隔离：10308 专属 ASGI 独立引擎 (无视任何反代环境)
 # ==============================================================================
 async def user_portal_app(scope, receive, send):
-    # 1. 截断生命周期，防止独立引擎与主程序的启动事件冲突 (解决死循环和崩溃)
     if scope["type"] == "lifespan":
         while True:
             message = await receive()
@@ -37,7 +36,6 @@ async def user_portal_app(scope, receive, send):
                 await send({"type": "lifespan.shutdown.complete"})
                 return
 
-    # 2. 纯物理硬路由：不看 Header，只要敲 10308 的门，一律按下面规矩办！
     elif scope["type"] == "http":
         path = scope.get("path", "")
         
@@ -46,13 +44,13 @@ async def user_portal_app(scope, receive, send):
             scope["path"] = "/request"
             scope["raw_path"] = b"/request"
             
-        # 🔥 铁血隔离白名单：放行求片页面、静态资源、以及所有受密码保护的底层 API
+        # 铁血隔离白名单：放行求片页面、静态资源、以及所有受密码保护的底层 API
         allowed = (
             "/request", 
             "/request_login", 
             "/static", 
             "/favicon.ico",
-            "/api"  # 放行所有 API (API 都有 Token 保护，绝对安全)
+            "/api"
         )
         if not scope["path"].startswith(allowed):
             async def send_404():
@@ -60,15 +58,12 @@ async def user_portal_app(scope, receive, send):
                 await send({"type": "http.response.body", "body": "<h1>404 Not Found</h1><p>非法越界，后台管理界面已被物理阻断。</p>".encode("utf-8")})
             return await send_404()
             
-        # 安全请求移交给 FastAPI 主程序处理
         await app(scope, receive, send)
-        
     else:
         await app(scope, receive, send)
 
 def start_10308_server():
     try:
-        # 自主接管 Socket，防范多进程争抢
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if hasattr(socket, 'SO_REUSEPORT'):
@@ -77,13 +72,11 @@ def start_10308_server():
         sock.bind(('0.0.0.0', 10308))
         sock.listen(100)
     except OSError:
-        # 如果端口已被其他 Worker 占用，静默退出，保全系统稳定
         return
 
     import uvicorn
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    # log_level="critical" 屏蔽日志打架
     config = uvicorn.Config(app=user_portal_app, log_level="critical")
     server = uvicorn.Server(config)
     server.install_signal_handlers = lambda: None
@@ -92,17 +85,34 @@ def start_10308_server():
     except BaseException:
         pass
 
+# ==============================================================================
+# 🔥 定制化纯中文启动面板
+# ==============================================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Starting EmbyPulse...")
+    print("\n" + "="*55)
+    print("🚀 [系统启动] 正在初始化 EmbyPulse 主程序...")
     bot.start()
     
-    # 🌟 在主程序启动时，唤醒 10308 独立守护引擎
+    # 唤醒 10308 独立守护引擎
     threading.Thread(target=start_10308_server, daemon=True).start()
     
+    # 稍微等0.5秒，确保端口绑定成功后再打印面板
+    await asyncio.sleep(0.5)
+    
+    print("🤖 [消息通知] 机器人模块已就绪")
+    print(f"🌍 [核心后台] 管理员仪表盘已运行在端口: {PORT}")
+    print("🎈 [用户中心] 独立求片门户已运行在端口: 10308")
+    print("✅ [系统状态] 物理隔离双引擎初始化完成，安全运行中！")
+    print("="*55 + "\n")
+    
     yield
-    print("🛑 Stopping EmbyPulse...")
+    
+    print("\n" + "="*55)
+    print("🛑 [系统关闭] 正在停止 EmbyPulse 服务...")
     bot.stop()
+    print("💤 [系统关闭] 所有服务已安全退出。")
+    print("="*55 + "\n")
 # ==============================================================================
 
 app = FastAPI(lifespan=lifespan)
