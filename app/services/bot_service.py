@@ -48,13 +48,12 @@ class SystemDaemon:
 
     def stop(self): self.running = False
 
-    def on_webhook_event(self, event: str, data: dict):
+  def on_webhook_event(self, event: str, data: dict):
         """精准提取系统关注的核心事件"""
         if "item.added" in event or "library.new" in event:
             item = data.get("Item", {})
             if item.get("Id"):
                 self.add_library_task(item)
-                # 单集的同步与缺集闭环
                 if item.get("Type") == "Episode":
                     from app.services.calendar_service import calendar_service
                     calendar_service.mark_episode_ready(item.get("SeriesId"), item.get("ParentIndexNumber"), item.get("IndexNumber"))
@@ -66,7 +65,8 @@ class SystemDaemon:
             bus.publish("notify.playback.stop", data)
         elif "authentication" in event or "login" in event:
             bus.publish("notify.user.login", data)
-        elif "deleted" in event:
+        # 🔥 增加兼容：防止 Jellyfin 发送的是 removed 而不是 deleted
+        elif "deleted" in event or "removed" in event:
             bus.publish("notify.item.deleted", data)
 
     def _get_admin_id(self):
@@ -489,30 +489,36 @@ class NotificationBot:
     def on_user_login(self, data):
         if not cfg.get("notify_user_login"): return
         try:
-            user = data.get("User", {})
-            session = data.get("Session", {})
-            ip = session.get("RemoteEndPoint", "127.0.0.1")
-            loc = self._get_location(ip)
-            client = session.get("Client") or data.get("Client") or "未知设备"
-            dev_name = session.get("DeviceName") or data.get("DeviceName") or "未知终端"
+            user = data.get("User") or {}
+            session = data.get("Session") or {}
             
-            msg = (f"🔐 <b>【{user.get('Name')}】登录了媒体库</b>\n\n"
+            # 🔥 强兼容：有些老版本/第三方客户端验证时，外层没有包 Session 结构
+            ip = session.get("RemoteEndPoint") or data.get("RemoteEndPoint") or "127.0.0.1"
+            loc = self._get_location(ip)
+            client = session.get("Client") or data.get("Client") or data.get("AppName") or "未知设备"
+            dev_name = session.get("DeviceName") or data.get("DeviceName") or "未知终端"
+            user_name = user.get("Name") or data.get("Title") or data.get("UserName") or "未知账号"
+            
+            msg = (f"🔐 <b>【{user_name}】登录了媒体库</b>\n\n"
                    f"🌐 地址：{ip} ({loc})\n📱 设备：{client} on {dev_name}\n"
                    f"🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self.send_message("sys_notify", msg, platform="all")
-        except Exception as e: pass
+        except Exception as e: 
+            logger.error(f"登录通知组装异常: {e}")
 
     def on_item_deleted(self, data):
         if not cfg.get("notify_item_deleted"): return
         try:
-            item = data.get("Item", {})
-            title = item.get("Name", "未知")
+            # 🔥 强兼容：有些版本删除时，不传外层 Item，直接把 Title 放在最外层
+            item = data.get("Item") or data
+            title = item.get("Name") or item.get("Title") or "未知资源"
             if item.get("SeriesName"): title = f"{item.get('SeriesName')} - {title}"
             
-            msg = (f"🗑️ <b>资源删除预警</b>\n\n"
+            msg = (f"🗑️ <b>资源物理删除预警</b>\n\n"
                    f"🎬 内容：{title}\n🕒 时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self.send_message("sys_notify", msg, platform="all")
-        except Exception as e: pass
+        except Exception as e: 
+            logger.error(f"删除通知组装异常: {e}")
 
     def on_daily_report(self):
         chat_id = "sys_notify"
