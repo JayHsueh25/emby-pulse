@@ -1,6 +1,7 @@
 import os
-import socket
+import asyncio
 import threading
+import socket
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -24,40 +25,54 @@ if not os.path.exists(FONT_DIR): os.makedirs(FONT_DIR)
 init_db()
 
 # ==============================================================================
-# 🔥 黑客级网络引擎：底层 TCP 流量微型转发器 (无视多进程冲突)
+# 🔥 终极黑客防御：无损高速异步转发引擎 (解决多进程打架与网络报错)
 # ==============================================================================
-def forward_data(source, destination):
+async def handle_client(reader, writer):
     try:
-        while True:
-            data = source.recv(8192)
-            if not data: break
-            destination.sendall(data)
-    except Exception: pass
-    finally:
-        try: source.close()
-        except: pass
-        try: destination.close()
+        # 内部悄悄连回主程序 10307 端口
+        remote_reader, remote_writer = await asyncio.open_connection('127.0.0.1', int(PORT))
+        
+        async def forward(src, dst):
+            try:
+                while True:
+                    data = await src.read(8192)
+                    if not data: break
+                    dst.write(data)
+                    await dst.drain()
+            except Exception: pass
+            finally:
+                try: dst.close()
+                except: pass
+
+        # 双向高速流转发，彻底解决网页卡死和登录报错
+        await asyncio.gather(
+            forward(reader, remote_writer),
+            forward(remote_reader, writer)
+        )
+    except Exception:
+        try: writer.close()
         except: pass
 
-def start_tcp_proxy():
+def start_async_proxy():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        # 创建一个纯底层的 TCP 监听器，不依赖任何 Web 框架
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind(('0.0.0.0', 10308))
-        server.listen(100)
-        print("🎈 [User Portal] 10308 端口已启动 (原生流量无感转发模式就绪)")
+        # 开启 SO_REUSEPORT 魔法：允许多个进程同时监听同一个端口，绝不崩服！
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try: sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except AttributeError: pass
         
-        while True:
-            client_sock, _ = server.accept()
-            server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server_sock.connect(('127.0.0.1', int(PORT))) # 内部悄悄连回主程序
-            
-            threading.Thread(target=forward_data, args=(client_sock, server_sock), daemon=True).start()
-            threading.Thread(target=forward_data, args=(server_sock, client_sock), daemon=True).start()
+        sock.bind(('0.0.0.0', 10308))
+        sock.listen(100)
+        sock.setblocking(False)
+        
+        coro = asyncio.start_server(handle_client, sock=sock)
+        loop.run_until_complete(coro)
+        print("🎈 [User Portal] Host模式专属: 10308 无损高速转发引擎已就绪！")
+        loop.run_forever()
     except OSError:
-        # 完美解决 Errno 98：如果是多进程启动，只有一个能抢到端口，剩下的静默退出，绝不崩服
-        pass
+        pass  # 极少数情况下没抢到端口，静默退出，绝不带着主程序崩溃
     except Exception:
         pass
 
@@ -65,10 +80,8 @@ def start_tcp_proxy():
 async def lifespan(app: FastAPI):
     print("🚀 Starting EmbyPulse...")
     bot.start()
-    
-    # 🌟 启动极轻量级的 TCP 转发线程
-    threading.Thread(target=start_tcp_proxy, daemon=True).start()
-    
+    # 🌟 启动高速转发引擎
+    threading.Thread(target=start_async_proxy, daemon=True).start()
     yield
     print("🛑 Stopping EmbyPulse...")
     bot.stop()
@@ -76,31 +89,42 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # ==============================================================================
-# 🔥 核心防御：10308 专属隐形分流中间件
+# 🔥 底层核心护城河：Pure ASGI 协议级隐形分流器 (彻底解决依然进入后台的问题)
 # ==============================================================================
-@app.middleware("http")
-async def port_10308_dispatcher(request: Request, call_next):
-    # 获取浏览器发来的原始请求头（虽然走了内部转发，但 Host 头依然是 10308）
-    host_header = request.headers.get("host", "")
-    
-    # 铁律：只要网址后面带的是 10308，统统关进求片中心的小黑屋
-    if host_header.endswith(":10308"):
-        path = request.url.path
-        
-        # 隐形重写：访问根目录当做访问求片中心
-        if path == "/":
-            request.scope["path"] = "/request"
+class Port10308Dispatcher:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            headers = dict(scope.get("headers", []))
             
-        # 物理隔绝：只放行这几个安全路径，后台的统统 404 封死
-        allowed_prefixes = (
-            "/request", "/request_login", 
-            "/api/v1/request", "/api/proxy/smart_image", 
-            "/static", "/favicon.ico"
-        )
-        if not request.scope["path"].startswith(allowed_prefixes):
-            return HTMLResponse("<h1>404 Not Found</h1><p>Access Denied.</p>", status_code=404)
+            # 提取所有可能暴露身份的 Host 信息
+            host = headers.get(b"host", b"").decode("utf-8")
+            x_fwd_port = headers.get(b"x-forwarded-port", b"").decode("utf-8")
+            x_fwd_host = headers.get(b"x-forwarded-host", b"").decode("utf-8")
             
-    return await call_next(request)
+            # 只要沾了 10308 的边，不管你是 Docker 映射、Nginx 反代还是 Host 模式，一律拿下！
+            if host.endswith(":10308") or x_fwd_port == "10308" or x_fwd_host.endswith(":10308"):
+                path = scope.get("path", "")
+                
+                # 1. 协议级篡改：在 FastAPI 还没看到之前，把路径硬改成 /request
+                if path == "/":
+                    scope["path"] = "/request"
+                    scope["raw_path"] = b"/request"
+                    
+                # 2. 物理铁血隔离：非安全路径，直接在底层返回 404，FastAPI 连处理的机会都没有
+                allowed = ("/request", "/request_login", "/api/v1/request", "/api/proxy", "/static", "/favicon.ico")
+                if not scope["path"].startswith(allowed):
+                    async def send_404():
+                        await send({"type": "http.response.start", "status": 404, "headers": [(b"content-type", b"text/html; charset=utf-8")]})
+                        await send({"type": "http.response.body", "body": b"<h1>404 Not Found</h1><p>非法越界，访问已被系统物理拒绝。</p>"})
+                    return await send_404()
+                    
+        await self.app(scope, receive, send)
+
+# 注册拦截器 (注意：必须放在最前面，让它成为拦截的第一道防线)
+app.add_middleware(Port10308Dispatcher)
 # ==============================================================================
 
 # 中间件
