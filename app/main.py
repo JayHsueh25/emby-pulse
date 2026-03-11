@@ -46,15 +46,25 @@ async def user_portal_app(scope, receive, send):
             scope["path"] = "/request"
             scope["raw_path"] = b"/request"
             
-        # 铁血隔离：只允许以下路径，别的统统底层物理阻断！
-        allowed = ("/request", "/request_login", "/api/v1/request", "/api/proxy", "/static", "/favicon.ico")
+        # 铁血隔离：放行求片中心必需的页面和所有的核心 API
+        allowed = (
+            "/request", 
+            "/request_login", 
+            "/api/v1/request", 
+            "/api/proxy", 
+            "/static", 
+            "/favicon.ico",
+            "/api/auth",     # 放行登录认证
+            "/api/search",   # 放行搜索资源
+            "/api/users/me"  # 放行获取当前登录状态
+        )
         if not scope["path"].startswith(allowed):
             async def send_404():
                 await send({"type": "http.response.start", "status": 404, "headers": [(b"content-type", b"text/html; charset=utf-8")]})
                 await send({"type": "http.response.body", "body": "<h1>404 Not Found</h1><p>非法越界，已被系统物理拦截。</p>".encode("utf-8")})
             return await send_404()
             
-        # 安全请求移交给 FastAPI 主程序渲染
+        # 安全请求移交给 FastAPI 主程序处理
         await app(scope, receive, send)
         
     else:
