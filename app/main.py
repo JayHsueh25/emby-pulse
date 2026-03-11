@@ -118,7 +118,8 @@ class Port10308Dispatcher:
                 if not scope["path"].startswith(allowed):
                     async def send_404():
                         await send({"type": "http.response.start", "status": 404, "headers": [(b"content-type", b"text/html; charset=utf-8")]})
-                        await send({"type": "http.response.body", "body": b"<h1>404 Not Found</h1><p>非法越界，访问已被系统物理拒绝。</p>"})
+                        # 🔥 修复了这里：中文必须用 .encode("utf-8") 转换为 bytes
+                        await send({"type": "http.response.body", "body": "<h1>404 Not Found</h1><p>非法越界，访问已被系统物理拒绝。</p>".encode("utf-8")})
                     return await send_404()
                     
         await self.app(scope, receive, send)
