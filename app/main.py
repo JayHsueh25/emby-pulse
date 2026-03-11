@@ -78,8 +78,7 @@ def start_10308_server():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
-    # 🔥 核心修改：改为 log_level="error"
-    # 效果：平时安静不刷屏，一旦有 Bug 或 500 错误，立刻输出详细报错日志！
+    # 错误日志才会打印，保证前台安静
     config = uvicorn.Config(app=user_portal_app, log_level="error")
     
     server = uvicorn.Server(config)
@@ -90,24 +89,21 @@ def start_10308_server():
         pass
 
 # ==============================================================================
-# 🔥 定制化纯中文启动面板
+# 🔥 定制化纯中文启动面板 (一口气输出完毕防插队)
 # ==============================================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("\n" + "="*55)
-    print("🚀 [系统启动] 正在初始化 EmbyPulse 主程序...")
     bot.start()
-    
     # 唤醒 10308 独立守护引擎
     threading.Thread(target=start_10308_server, daemon=True).start()
     
-    # 稍微等0.5秒，确保端口绑定成功后再打印面板
-    await asyncio.sleep(0.5)
-    
+    # 🔥 拿掉 sleep，把面板一口气打印完，绝对整齐！
+    print("\n" + "="*55)
+    print("🚀 [系统启动] EmbyPulse 双引擎初始化成功！")
     print("🤖 [消息通知] 机器人模块已就绪")
-    print(f"🌍 [核心后台] 管理员仪表盘已运行在端口: {PORT}")
-    print("🎈 [用户中心] 独立求片门户已运行在端口: 10308")
-    print("✅ [系统状态] 物理隔离双引擎初始化完成，安全运行中！")
+    print(f"🌍 [核心后台] 管理员仪表盘运行在端口: {PORT}")
+    print("🎈 [用户中心] 独立求片门户运行在端口: 10308")
+    print("✅ [系统状态] 物理隔离架构已启动，安全防护中！")
     print("="*55 + "\n")
     
     yield
