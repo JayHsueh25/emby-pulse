@@ -65,16 +65,19 @@
 
     <aside class="w-[240px] h-screen sticky top-0 bg-apple-cardLight dark:bg-apple-cardDark border-r border-apple-borderLight dark:border-apple-borderDark hidden md:flex flex-col shrink-0 z-50 shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-none">
         
-        <div class="px-6 pt-10 pb-6 flex items-center gap-3.5 shrink-0">
+        <div class="px-6 pt-8 pb-6 flex items-center gap-3.5 shrink-0">
             <img src="/static/img/logo-app.png" class="w-10 h-10 drop-shadow-md">
-            <div class="flex flex-col justify-center">
-                <div class="flex items-center">
+            
+            <div class="flex flex-col">
+                <div class="flex items-center leading-none">
                     <span class="font-black text-[20px] tracking-tight text-gray-900 dark:text-white">EMBY</span>
                     <span class="font-black text-[20px] tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-brand-500 to-indigo-500 italic ml-1">PULSE</span>
                 </div>
-                <div class="flex items-center gap-1.5 mt-0.5">
-                    <span class="text-[9px] font-mono font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em]">Management</span>
-                    <span class="text-[8px] font-black bg-gray-100 dark:bg-white/5 text-gray-400 px-1.5 py-0.5 rounded-md border border-gray-200/50 dark:border-white/5 uppercase">v{{ version }}</span>
+                
+                <div class="flex justify-center mt-1.5">
+                    <span class="text-[9px] font-black bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-lg border border-gray-200/50 dark:border-white/5 uppercase tracking-[0.2em] leading-none">
+                        v{{ version }}
+                    </span>
                 </div>
             </div>
         </div>
