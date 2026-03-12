@@ -1,6 +1,6 @@
 import sqlite3
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Optional
 from app.core.database import query_db, DB_PATH
@@ -25,6 +25,11 @@ def ensure_table_exists():
             action_url TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )''')
+        # 🔥 无损热更新：为旧表自动增加 is_cleared 隐藏标记列
+        try:
+            c.execute("ALTER TABLE sys_notifications ADD COLUMN is_cleared INTEGER DEFAULT 0")
+        except:
+            pass # 如果已经有了就会报错，忽略即可
         conn.commit()
         conn.close()
     except Exception as e:
@@ -32,16 +37,18 @@ def ensure_table_exists():
 
 @router.get("")
 @router.get("/")
-async def get_notifications(limit: int = 10):
+async def get_notifications(limit: int = 10, history: bool = False):
     ensure_table_exists()
     try:
-        count_res = query_db("SELECT COUNT(*) as c FROM sys_notifications WHERE is_read = 0")
-        if count_res is None:
-            unread_count = 0
-        else:
-            unread_count = count_res[0]['c']
+        # 未读数量只统计没被清空的
+        count_res = query_db("SELECT COUNT(*) as c FROM sys_notifications WHERE is_read = 0 AND is_cleared = 0")
+        unread_count = count_res[0]['c'] if count_res else 0
 
-        rows = query_db("SELECT * FROM sys_notifications ORDER BY created_at DESC LIMIT ?", (limit,))
+        # 🔥 核心逻辑：如果是拉取历史记录，就无视 is_cleared 标志全部拉出；否则只拉取未被清理的
+        if history:
+            rows = query_db("SELECT * FROM sys_notifications ORDER BY created_at DESC LIMIT ?", (limit,))
+        else:
+            rows = query_db("SELECT * FROM sys_notifications WHERE is_cleared = 0 ORDER BY created_at DESC LIMIT ?", (limit,))
         
         notifications = []
         if rows:
@@ -68,20 +75,20 @@ async def mark_as_read(req: MarkReadReq):
         if req.id:
             cur.execute("UPDATE sys_notifications SET is_read = 1 WHERE id = ?", (req.id,))
         else:
-            cur.execute("UPDATE sys_notifications SET is_read = 1 WHERE is_read = 0")
+            cur.execute("UPDATE sys_notifications SET is_read = 1 WHERE is_read = 0 AND is_cleared = 0")
         conn.commit()
         conn.close()
         return {"success": True}
     except Exception as e:
         return {"success": False, "msg": str(e)}
 
-# 🔥 新增：一键清空数据库中的所有通知记录
 @router.delete("/clear")
 async def clear_notifications():
     try:
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
-        cur.execute("DELETE FROM sys_notifications")
+        # 🔥 核心逻辑：不再是 DELETE FROM，而是软删除（同时标记为已读并隐藏）
+        cur.execute("UPDATE sys_notifications SET is_cleared = 1, is_read = 1 WHERE is_cleared = 0")
         conn.commit()
         conn.close()
         return {"success": True}

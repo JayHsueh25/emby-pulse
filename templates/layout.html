@@ -548,7 +548,7 @@
 
         function fetchHistoryNotifications() {
             // 拉取最近的 100 条通知作为历史展示
-            fetch('/api/notifications?limit=100') 
+            fetch('/api/notifications?limit=100&history=true') 
                 .then(res => res.json())
                 .then(data => {
                     const list = document.getElementById('notify-history-list');
