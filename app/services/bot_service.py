@@ -411,7 +411,6 @@ class NotificationBot:
         year = series_info.get("ProductionYear", "")
         rating = series_info.get("CommunityRating", "N/A")
         
-        # 🔥 剧情简介强制清洗首尾空白
         overview = str(series_info.get("Overview") or "")
         overview = re.sub(r'<[^>]+>', '', overview).strip()
         if not overview: overview = "暂无简介..."
@@ -436,7 +435,6 @@ class NotificationBot:
         year = item.get("ProductionYear", "")
         rating = item.get("CommunityRating", "N/A")
         
-        # 🔥 剧情简介强制清洗首尾空白
         overview = str(item.get("Overview") or "")
         overview = re.sub(r'<[^>]+>', '', overview).strip()
         if not overview: overview = "暂无简介..."
@@ -498,42 +496,15 @@ class NotificationBot:
             target_id = item.get("Id")
             raw_type = item.get("Type", "")
             
-            # 🔥 修复：先尝试从 Webhook 的 Item 中直接提取 SeriesId，如果没有再兜底去 Session 里找
-            series_id = item.get("SeriesId") or session.get("NowPlayingItem", {}).get("SeriesId")
-            
-            # 主动抓取可能缺失的剧情简介和评分
-            if target_id:
+            detail_res = {}
+            if target_id and user_id:
                 try:
                     host = cfg.get("emby_host")
                     key = cfg.get("emby_api_key")
-                    
-                    detail_res = requests.get(f"{host}/emby/Items/{target_id}?api_key={key}", timeout=2).json()
-                    
-                    if run_ticks <= 0:
-                        run_ticks = int(detail_res.get("RunTimeTicks") or 0)
+                    resp = requests.get(f"{host}/emby/Users/{user_id}/Items/{target_id}?api_key={key}", timeout=2)
+                    if resp.status_code == 200:
+                        detail_res = resp.json()
                         
-                    # 如果仍没有拿到 SeriesId，去当前项目的详情里拿
-                    if not series_id:
-                        series_id = detail_res.get("SeriesId") or detail_res.get("ParentId")
-                        
-                    ep_overview = item.get("Overview")
-                    # 强力洗净判断：如果是纯空格，视为无效，去拿详情补充
-                    if not ep_overview or not str(ep_overview).strip():
-                        item["Overview"] = detail_res.get("Overview")
-                        
-                    if not item.get("CommunityRating"):
-                        item["CommunityRating"] = detail_res.get("CommunityRating")
-                            
-                    # 🔥 核心防穿透逻辑：如果是单集，且上面的步骤（单集详情）依旧没提供简介，则顺藤摸瓜抓取【整部剧】的简介/评分
-                    if raw_type == "Episode" and series_id:
-                        current_overview = item.get("Overview")
-                        if not current_overview or not str(current_overview).strip() or not item.get("CommunityRating"):
-                            series_res = requests.get(f"{host}/emby/Items/{series_id}?api_key={key}", timeout=2).json()
-                            if not current_overview or not str(current_overview).strip():
-                                item["Overview"] = series_res.get("Overview")
-                            if not item.get("CommunityRating"):
-                                item["CommunityRating"] = series_res.get("CommunityRating")
-
                     if pos_ticks <= 0 and session.get("Id"):
                         sess_res = requests.get(f"{host}/emby/Sessions?api_key={key}", timeout=2).json()
                         for s in sess_res:
@@ -541,6 +512,34 @@ class NotificationBot:
                                 pos_ticks = int(s.get("PlayState", {}).get("PositionTicks") or 0)
                                 break
                 except: pass
+
+            if run_ticks <= 0:
+                run_ticks = int(detail_res.get("RunTimeTicks") or 0)
+
+            # 🔥 核心提纯与穿透逻辑：获取用户视角的简介和评分
+            overview_raw = detail_res.get("Overview") or item.get("Overview") or ""
+            rating_raw = detail_res.get("CommunityRating") or item.get("CommunityRating")
+
+            # 如果是单集，且上面的步骤依旧拿到了全是空格的无效简介，或者没有评分，则强制向剧集本体求援！
+            series_id = detail_res.get("SeriesId") or item.get("SeriesId")
+            if raw_type == "Episode" and series_id:
+                if not str(overview_raw).strip() or not rating_raw:
+                    try:
+                        series_res = requests.get(f"{host}/emby/Users/{user_id}/Items/{series_id}?api_key={key}", timeout=2).json()
+                        if not str(overview_raw).strip():
+                            overview_raw = series_res.get("Overview") or ""
+                        if not rating_raw:
+                            rating_raw = series_res.get("CommunityRating")
+                    except: pass
+
+            # 🔥 强力剥离原网页带来的幽灵换行符、Tab和首尾空格
+            overview = re.sub(r'<[^>]+>', '', str(overview_raw)).strip()
+            if not overview:
+                overview = "暂无简介..."
+            elif len(overview) > 150:
+                overview = overview[:140] + "..."
+
+            rating_str = f"{rating_raw}/10" if rating_raw else "无"
 
             title = item.get("Name") or "未知内容"
             ep_info = ""
@@ -570,17 +569,6 @@ class NotificationBot:
 
             client = session.get("Client") or data.get("Client") or "未知端"
             device = session.get("DeviceName") or data.get("DeviceName") or "未知设备"
-            
-            rating = item.get("CommunityRating")
-            rating_str = f"{rating}/10" if rating else "无"
-            
-            # 🔥 强制清洗首尾全部不可见幽灵字符
-            overview_raw = str(item.get("Overview") or "")
-            overview = re.sub(r'<[^>]+>', '', overview_raw).strip() 
-            if not overview:
-                overview = "暂无简介..."
-            elif len(overview) > 150: 
-                overview = overview[:140] + "..."
 
             msg = (f"{emoji} <b>【{user_name}】{act} {type_cn} {title}</b>{ep_info}\n\n"
                    f"⭐ <b>评分：</b>{rating_str} ｜ 📚 <b>类型：</b>{type_cn}\n"
@@ -591,7 +579,7 @@ class NotificationBot:
                    f"📝 <b>剧情：</b>{overview}")
             
             target_jump_id = target_id
-            if raw_type == "Episode" and item.get("SeriesId"): target_jump_id = item.get("SeriesId")
+            if raw_type == "Episode" and series_id: target_jump_id = series_id
             elif raw_type == "Audio" and item.get("AlbumId"): target_jump_id = item.get("AlbumId")
             
             base_url = cfg.get_main_public_url() or cfg.get("emby_host")
@@ -759,8 +747,8 @@ class NotificationBot:
 
     def _clean_location(self, loc):
         if not loc: return ""
-        loc = re.sub(r'(中国|省|市|自治区|自治州|特别行政区|移动|联通|电信|铁通|教育网|广电|通信|数据中心|IDC)', ' ', loc)
-        loc = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9\s]', ' ', loc)
+        # 🔥 优化：仅剔除运营商和国家，保留省市等后缀，看起来更连贯
+        loc = re.sub(r'(中国|移动|联通|电信|铁通|教育网|广电|通信|数据中心|IDC)', '', loc)
         loc = re.sub(r'\s+', ' ', loc).strip() 
         return loc
 
@@ -777,7 +765,22 @@ class NotificationBot:
         if cache_key in self.ip_cache: return self.ip_cache[cache_key]
 
         loc = ""
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0"}
+
+        # 🔥 引入全球最稳定、支持 IPv6 最好的 IP-API 接口作为首选
+        if not loc:
+            try:
+                res = requests.get(f"http://ip-api.com/json/{ip}?lang=zh-CN", timeout=3)
+                if res.status_code == 200:
+                    d = res.json()
+                    if d.get("status") == "success":
+                        region = d.get("regionName", "")
+                        city = d.get("city", "")
+                        if city and city in region:
+                            loc = region
+                        else:
+                            loc = f"{region} {city}"
+            except: pass
 
         if not loc:
             try:
@@ -786,24 +789,6 @@ class NotificationBot:
                     d = res.json().get('data', {})
                     if d.get('province') or d.get('city'):
                         loc = f"{d.get('province', '')} {d.get('city', '')}"
-            except: pass
-
-        if not loc:
-            try:
-                res = requests.get(f"https://ip.zxinc.org/api.php?type=json&ip={ip}", headers=headers, timeout=3)
-                if res.status_code == 200:
-                    d = res.json().get('data', {})
-                    if d.get('location'):
-                        loc = d.get('location') 
-            except: pass
-
-        if not loc:
-            try:
-                res = requests.get(f"https://whois.pconline.com.cn/ipJson.jsp?ip={ip}&json=true", headers=headers, timeout=3)
-                if res.status_code == 200:
-                    d = res.json()
-                    if d.get('pro') or d.get('city'):
-                        loc = f"{d.get('pro', '')} {d.get('city', '')}"
             except: pass
 
         loc = self._clean_location(loc)
@@ -1266,7 +1251,6 @@ class NotificationBot:
             rating = details.get("CommunityRating", "N/A")
             genres = " / ".join(details.get("Genres", [])[:3]) or "未分类"
             
-            # 🔥 强制清洗首尾全部不可见幽灵字符
             overview = str(details.get("Overview") or "")
             overview = re.sub(r'<[^>]+>', '', overview).strip()
             if not overview: overview = "暂无简介"
