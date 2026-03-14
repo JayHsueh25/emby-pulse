@@ -87,19 +87,15 @@ class ConfigManager:
     def get(self, key, default=None): 
         return self.config.get(key, default if default is not None else DEFAULT_CONFIG.get(key))
     
-    # 🔥 核心解耦提取器：确保内部业务逻辑拿到的永远是绝对正确的“主线路”
     def get_main_public_url(self):
         raw_url_str = self.get("emby_public_url", "")
         if not raw_url_str:
             return ""
         try:
             routes = json.loads(raw_url_str)
-            if isinstance(routes, list):
-                for r in routes:
-                    if r.get("is_main"):
-                        return r.get("url", "").rstrip('/')
-                if routes:
-                    return routes[0].get("url", "").rstrip('/')
+            if isinstance(routes, list) and len(routes) > 0:
+                # 🔥 铁律：无视所有旧的 is_main 标记，永远只取第 1 个网址！
+                return routes[0].get("url", "").rstrip('/')
         except Exception:
             pass
         return raw_url_str.strip().rstrip('/')

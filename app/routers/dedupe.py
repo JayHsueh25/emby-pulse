@@ -140,7 +140,6 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
         admin_res = requests.get(f"{host}/emby/Users?api_key={key}", timeout=5).json()
         admin_id = next((u['Id'] for u in admin_res if u.get("Policy", {}).get("IsAdministrator")), admin_res[0]['Id'])
         
-        # 🔥 核心修复 1：在拉取单集前，预先拉取所有 Series，建立 [SeriesId -> TMDB ID] 的强映射字典
         series_map = {}
         try:
             s_url = f"{host}/emby/Users/{admin_id}/Items"
@@ -175,7 +174,6 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
                 if not tmdb: continue
                 g_key = f"movie_{tmdb}"
             elif mtype == "Episode":
-                # 🔥 核心修复 2：单集没有 TMDB ID，必须查刚才建的字典！查不到用自身 SeriesId 兜底！
                 series_id = i.get("SeriesId") or i.get("ParentId") or "unknown"
                 series_tmdb = series_map.get(series_id) or series_id
                 g_key = f"tv_{series_tmdb}_s{i.get('ParentIndexNumber', 0)}e{i.get('IndexNumber', 0)}"
@@ -209,7 +207,6 @@ def run_dedupe_scan(strategy: str = "quality", custom_weights: dict = None):
                 full_path = src.get("Path", "")
                 file_name = full_path.split("/")[-1].split("\\")[-1] if full_path else d.get("Name", "未知文件")
                 
-                # 直接从 g_key 中反向提取出真实的 TMDB 标志
                 tmdb_val = g_key.split("_")[1] if "_" in g_key else ""
                 
                 parsed_items.append({
@@ -290,10 +287,10 @@ async def get_results():
     if rows:
         for r in rows: result_tree[r["group_key"]].append(dict(r))
         
-    base_url = cfg.get("emby_public_url") or cfg.get("emby_host") or ""
+    # 🔥 核心修复：调用纯净的主线路提取器
+    base_url = cfg.get_main_public_url() or cfg.get("emby_host") or ""
     if base_url.endswith('/'): base_url = base_url[:-1]
     
-    # 🔥 核心修复 3：主动抓取 Emby ServerId 喂给前端进行精确跳转
     server_id = ""
     try:
         host = cfg.get("emby_host"); key = cfg.get("emby_api_key")

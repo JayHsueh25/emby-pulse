@@ -1,6 +1,5 @@
 import os
 import requests
-import json
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -20,23 +19,10 @@ def check_login(request: Request):
     if user and user.get("is_admin"): return True
     return False
 
-# 🔥 核心修复：智能公网网址解析器
-# 无论是老版本的单行网址，还是新版的 JSON 多线路，它都能精准提取出唯一的主线路 URL 给前端使用。
+# 🔥 全局注入引擎：给所有页面注入最纯净的主线路地址
 def get_common_vars(request: Request, active_page: str, extra_vars: dict = None):
-    raw_url = cfg.get("emby_public_url") or cfg.get("emby_public_host") or cfg.get("emby_host") or ""
-    emby_url = raw_url
-    try:
-        routes = json.loads(raw_url)
-        if isinstance(routes, list) and len(routes) > 0:
-            emby_url = routes[0].get("url", "")
-            for r in routes:
-                if r.get("is_main"): 
-                    emby_url = r.get("url", "")
-                    break
-    except Exception:
-        pass
-        
-    emby_url = emby_url.strip().rstrip('/')
+    emby_url = cfg.get_main_public_url() or cfg.get("emby_public_host") or cfg.get("emby_host") or ""
+    emby_url = emby_url.rstrip('/')
     
     server_id = ""
     try:
@@ -48,13 +34,11 @@ def get_common_vars(request: Request, active_page: str, extra_vars: dict = None)
         "request": request,
         "version": APP_VERSION,
         "active_page": active_page,
-        "emby_url": emby_url,     # 提取后的纯净主线路
+        "emby_url": emby_url,
         "server_id": server_id
     }
-    if extra_vars:
-        vars_dict.update(extra_vars)
+    if extra_vars: vars_dict.update(extra_vars)
     return vars_dict
-
 
 @router.get("/apple-touch-icon.png")
 @router.get("/apple-touch-icon-precomposed.png")
