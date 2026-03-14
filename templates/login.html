@@ -57,7 +57,7 @@
         .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
         @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
 
-        /* 修复浏览器自动填充导致的背景色变白（利用超长动画时间欺骗浏览器保留透明背景） */
+        /* 修复浏览器自动填充导致的背景色变白 */
         input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active {
             transition: background-color 5000s ease-in-out 0s;
             -webkit-text-fill-color: #111 !important;
@@ -77,15 +77,15 @@
     <div id="bg-img" class="bg-poster"></div>
     <div class="bg-dimmer"></div>
 
-    <div class="apple-glass w-full max-w-[420px] mx-5 p-8 md:p-10 rounded-[32px] z-10" id="login-card">
+    <div class="apple-glass w-full max-w-[420px] mx-4 sm:mx-5 p-6 sm:p-8 md:p-10 rounded-[24px] md:rounded-[32px] z-10" id="login-card">
         
-        <div class="text-center mb-10">
-            <img src="/static/img/logo-app.png" alt="EmbyPulse Logo" class="w-[76px] h-[76px] object-cover mx-auto mb-4 rounded-[22px] shadow-lg border border-white/60 dark:border-white/10 bg-white dark:bg-[#1C1C1E]">
-            <h1 class="text-[28px] font-black tracking-tight text-gray-900 dark:text-white mb-1.5">EmbyPulse</h1>
-            <p class="text-[13px] text-gray-600 dark:text-gray-300 font-bold tracking-widest">您的专属私域流媒体数据管家</p>
+        <div class="text-center mb-8 md:mb-10">
+            <img src="/static/img/logo-app.png" alt="EmbyPulse Logo" class="w-16 h-16 md:w-[76px] md:h-[76px] object-cover mx-auto mb-3 md:mb-4 rounded-[18px] md:rounded-[22px] shadow-lg border border-white/60 dark:border-white/10 bg-white dark:bg-[#1C1C1E]">
+            <h1 class="text-[24px] md:text-[28px] font-black tracking-tight text-gray-900 dark:text-white mb-1 md:mb-1.5">EmbyPulse</h1>
+            <p class="text-[12px] md:text-[13px] text-gray-600 dark:text-gray-300 font-bold tracking-widest">您的专属私域流媒体数据管家</p>
         </div>
 
-        <form id="login-form" class="space-y-5" onsubmit="handleLogin(event)">
+        <form id="login-form" class="space-y-4 md:space-y-5" onsubmit="handleLogin(event)">
             
             <div>
                 <label class="block text-[11px] font-bold text-gray-600 dark:text-gray-400 mb-2 pl-1 uppercase tracking-wider">系统账号</label>
@@ -94,7 +94,7 @@
                         <i class="fa-solid fa-user text-[14px]"></i>
                     </div>
                     <input type="text" id="username" required autocomplete="username"
-                        class="flex-1 bg-transparent border-none py-3.5 pr-4 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-0 text-[14px] font-medium"
+                        class="flex-1 bg-transparent border-none py-3 md:py-3.5 pr-4 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-0 text-[14px] font-medium"
                         placeholder="请输入 Emby 管理员账号">
                 </div>
             </div>
@@ -106,13 +106,13 @@
                         <i class="fa-solid fa-lock text-[14px]"></i>
                     </div>
                     <input type="password" id="password" autocomplete="current-password"
-                        class="flex-1 bg-transparent border-none py-3.5 pr-4 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-0 text-[14px] font-medium"
+                        class="flex-1 bg-transparent border-none py-3 md:py-3.5 pr-4 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-0 text-[14px] font-medium"
                         placeholder="请输入密码 (如未设置请留空)">
                 </div>
             </div>
 
             <button type="submit" id="submit-btn"
-                class="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3.5 rounded-[16px] shadow-[0_8px_20px_rgba(79,70,229,0.3)] dark:shadow-[0_8px_20px_rgba(79,70,229,0.4)] transform transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] flex items-center justify-center gap-2 mt-6 border border-brand-500">
+                class="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3 md:py-3.5 rounded-[16px] shadow-[0_8px_20px_rgba(79,70,229,0.3)] dark:shadow-[0_8px_20px_rgba(79,70,229,0.4)] transform transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] flex items-center justify-center gap-2 mt-5 md:mt-6 border border-brand-500">
                 <span id="btn-text" class="text-[15px] tracking-wide">登录大盘</span>
                 <i id="btn-icon" class="fa-solid fa-arrow-right-to-bracket text-[14px] opacity-80"></i>
             </button>
