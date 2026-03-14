@@ -32,18 +32,16 @@
         }
         .bg-poster.loaded { opacity: 1; transform: scale(1); }
 
-        /* 亮色模式渐变遮罩 */
+        /* 亮色模式渐变遮罩 (去除模糊，仅保留底部渐变以凸显版权文字) */
         .bg-overlay-light {
             position: fixed; inset: 0; z-index: -1;
-            background: linear-gradient(to bottom, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,1) 100%);
-            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            background: linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.6) 60%, rgba(255,255,255,1) 100%);
             transition: opacity 0.5s ease; opacity: 1;
         }
-        /* 暗色模式渐变遮罩 */
+        /* 暗色模式渐变遮罩 (去除模糊，加深一点暗场以凸显卡片) */
         .bg-overlay-dark {
             position: fixed; inset: 0; z-index: -1;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(17,17,17,0.85) 50%, rgba(17,17,17,1) 100%);
-            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(17,17,17,0.7) 60%, rgba(17,17,17,1) 100%);
             transition: opacity 0.5s ease; opacity: 0;
         }
         html.dark .bg-overlay-light { opacity: 0; }
@@ -84,23 +82,21 @@
 
     <div class="apple-glass w-full max-w-[420px] mx-5 p-8 md:p-10 rounded-[32px] z-10" id="login-card">
         
-        <div class="text-center mb-10">
-            <div class="w-[72px] h-[72px] bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-500 rounded-[22px] flex items-center justify-center mx-auto mb-5 border border-brand-100 dark:border-brand-500/20 shadow-inner">
-                <i class="fa-solid fa-heart-pulse text-[32px] animate-[pulse_3s_ease-in-out_infinite]"></i>
-            </div>
+        <div class="text-center mb-9">
+            <img src="/static/img/logo-app.png" alt="Logo" class="w-[76px] h-[76px] object-cover mx-auto mb-4 rounded-[22px] shadow-lg border border-white/50 dark:border-white/10 bg-white dark:bg-[#1C1C1E]">
             <h1 class="text-[28px] font-black tracking-tight text-gray-900 dark:text-white mb-1.5">EmbyPulse</h1>
-            <p class="text-[12px] text-gray-500 dark:text-gray-400 font-bold tracking-[0.2em] uppercase">Administrator Access</p>
+            <p class="text-[13px] text-gray-500 dark:text-gray-400 font-medium tracking-wide">您的专属私域流媒体数据管家</p>
         </div>
 
         <form id="login-form" class="space-y-5" onsubmit="handleLogin(event)">
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-2 pl-1 uppercase tracking-wider">系统账号 (Username)</label>
                 <div class="relative group">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-4.5 text-gray-400 group-focus-within:text-brand-500 transition-colors">
+                    <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400 group-focus-within:text-brand-500 transition-colors">
                         <i class="fa-solid fa-user text-[14px]"></i>
-                    </span>
+                    </div>
                     <input type="text" id="username" required autocomplete="username"
-                        class="w-full bg-white/70 dark:bg-black/30 border border-gray-200/80 dark:border-white/10 rounded-[16px] py-3.5 pl-12 pr-4 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 focus:bg-white dark:focus:bg-black/50 transition-all text-[14px] font-medium shadow-sm"
+                        class="w-full bg-white/70 dark:bg-black/30 border border-gray-200/80 dark:border-white/10 rounded-[16px] py-3.5 pl-11 pr-4 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 focus:bg-white dark:focus:bg-black/50 transition-all text-[14px] font-medium shadow-sm"
                         placeholder="请输入 Emby 管理员账号">
                 </div>
             </div>
@@ -108,11 +104,11 @@
             <div>
                 <label class="block text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-2 pl-1 uppercase tracking-wider">身份凭证 (Password)</label>
                 <div class="relative group">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-4.5 text-gray-400 group-focus-within:text-brand-500 transition-colors">
+                    <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400 group-focus-within:text-brand-500 transition-colors">
                         <i class="fa-solid fa-lock text-[14px]"></i>
-                    </span>
+                    </div>
                     <input type="password" id="password" autocomplete="current-password"
-                        class="w-full bg-white/70 dark:bg-black/30 border border-gray-200/80 dark:border-white/10 rounded-[16px] py-3.5 pl-12 pr-4 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 focus:bg-white dark:focus:bg-black/50 transition-all text-[14px] font-medium shadow-sm"
+                        class="w-full bg-white/70 dark:bg-black/30 border border-gray-200/80 dark:border-white/10 rounded-[16px] py-3.5 pl-11 pr-4 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 focus:bg-white dark:focus:bg-black/50 transition-all text-[14px] font-medium shadow-sm"
                         placeholder="请输入密码 (如未设置请留空)">
                 </div>
             </div>
@@ -130,10 +126,9 @@
     </div>
 
     <script>
-        // 主题初始化逻辑：严格执行你的要求，默认亮色模式
+        // 主题初始化逻辑：默认亮色模式
         function initTheme() {
             const icon = document.getElementById('theme-icon');
-            // 只有当本地明确存储了 dark 时，才开启暗色，否则一律亮色
             if (localStorage.theme === 'dark') {
                 document.documentElement.classList.add('dark');
                 icon.className = 'fa-solid fa-sun text-lg';
@@ -158,7 +153,6 @@
             }
         }
 
-        // 立即执行主题初始化
         initTheme();
 
         // 获取并渲染 TMDB 背景
@@ -191,7 +185,6 @@
             const user = document.getElementById('username').value;
             const pass = document.getElementById('password').value;
 
-            // 登录中状态
             btnText.innerText = "验证中...";
             btnIcon.className = "fa-solid fa-circle-notch fa-spin text-[14px]";
             btn.disabled = true;
@@ -216,17 +209,14 @@
                     throw new Error(json.message);
                 }
             } catch (err) {
-                // 恢复按钮状态
                 btnText.innerText = "登录大盘";
                 btnIcon.className = "fa-solid fa-arrow-right-to-bracket text-[14px] opacity-80";
                 btn.disabled = false;
                 btn.classList.remove('opacity-80', 'cursor-not-allowed', 'scale-[0.98]');
                 
-                // 触发震动动效
                 card.classList.add('shake');
                 setTimeout(() => card.classList.remove('shake'), 500);
                 
-                // 弹出美化的错误提示 (适配双色模式)
                 const toast = document.createElement('div');
                 toast.className = 'fixed top-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-[#2C2C2E] text-red-500 border border-red-200 dark:border-red-500/20 px-6 py-3.5 rounded-full shadow-2xl z-50 text-[13px] font-bold flex items-center animate-bounce';
                 toast.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-2.5 text-lg"></i> ${err.message}`;
