@@ -254,11 +254,11 @@ A: 这是浏览器的自动填充策略。本项目已在最新版本中加入�
 ## 🙏 鸣谢
 
 <div align="center">
-  <a href="https://new.yunai.link/register?aff=rPv1">
+  <a href="https://newnei.apifast.top/register?aff=rPv1">
     <img src="https://img.shields.io/badge/云AI-API%20平台-6366F1?style=for-the-badge&labelColor=4F46E5" alt="云AI" />
   </a>
   <br/>
-  <sub>感谢 <a href="https://new.yunai.link/register?aff=rPv1">云AI</a> 对本项目的赞助支持</sub>
+  <sub>感谢 <a href="https://newnei.apifast.top/register?aff=rPv1">云AI</a> 对本项目的赞助支持</sub>
   <br/>
   <sub>云AI 致力于为开发者提供快速、便捷的 Web API 接口调用方案，一站式集成几乎所有 AI 大模型</sub>
 </div>
